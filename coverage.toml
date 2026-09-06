@@ -1,0 +1,31 @@
+# Coverage configuration for the shared tooling in jmerhar/coverage, which renders the CI
+# summary table, enforces the gates, and publishes the HTML reports.
+#
+# Two suites, each in its own tool's format: the backend (Python, coverage.py) and the
+# frontend (vitest/istanbul). The JSON summaries are read rather than the XML both tools can
+# also emit, because the two tools' XML dialects differ while their JSON totals are exact.
+#
+# The suites run in separate CI jobs, so the coverage job restores both reports from
+# artifacts to the paths below before any of this runs.
+
+# Each gate sits just under its suite's measured line coverage: tight enough to catch a real
+# regression, loose enough to tolerate the odd defensive line. Raise them as coverage climbs;
+# never lower one to make a red build pass.
+#
+# The backend gate accounts for the Playwright driver, whose remaining uncovered lines are
+# error paths inside a real browser session that the integration tests — skipped unless a
+# browser and a display are present — are the only thing that can reach.
+
+[suites.backend]
+label = "Backend (Python)"
+format = "coveragepy"
+report = "backend/coverage.json"
+html = "backend/htmlcov"
+gate = 96.0
+
+[suites.frontend]
+label = "Frontend (TypeScript)"
+format = "istanbul"
+report = "frontend/coverage/coverage-summary.json"
+html = "frontend/coverage"
+gate = 96.0
