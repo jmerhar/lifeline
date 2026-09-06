@@ -35,6 +35,12 @@ COPY backend/pyproject.toml ./
 COPY backend/src ./src
 RUN pip install . \
     && python -m playwright install --with-deps chromium \
+    # Playwright installs a separate headless shell beside the full browser. An interactive
+    # login needs the full build, and driver.py asks for it headlessly too, so the shell is a
+    # third of a gigabyte for a second Chromium nothing here launches. ffmpeg is for recording
+    # video, which this never does.
+    && rm -rf "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-* \
+              "$PLAYWRIGHT_BROWSERS_PATH"/ffmpeg-* \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/alembic.ini ./

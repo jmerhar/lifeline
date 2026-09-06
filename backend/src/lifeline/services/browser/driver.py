@@ -176,7 +176,13 @@ class PlaywrightDriver:
 
         playwright = await async_playwright().start()
         try:
-            browser = await playwright.chromium.launch(headless=True, args=LAUNCH_ARGS)
+            # The full browser in headless mode, rather than Playwright's separate headless
+            # shell: an interactive login needs the full build anyway, and asking for it here
+            # too means the image ships one Chromium instead of two — a third of a gigabyte
+            # for a second copy that only differs in how it draws.
+            browser = await playwright.chromium.launch(
+                headless=True, channel="chromium", args=LAUNCH_ARGS
+            )
             try:
                 context = await browser.new_context(
                     storage_state=state, user_agent=user_agent or None
