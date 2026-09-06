@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Two palettes, not one palette and its inverse. Each theme's colours are picked against
+ * that theme's own background: the dark jade would be too pale to read on white, and the
+ * light amber and red had to be re-stepped away from each other because at their first
+ * values they were hard to tell apart even with full colour vision.
+ *
+ * The four status colours carry all of the meaning in this interface, so the single
+ * interactive colour is an indigo that sits outside green/amber/red — otherwise "the
+ * primary button" and "this session is healthy" would be the same signal.
+ */
+:root {
+  color-scheme: dark;
+
+  --base: 16 24 34;
+  --surface: 24 34 46;
+  --raised: 33 45 59;
+  --line: 38 51 63;
+  --ink: 230 237 243;
+  --muted: 140 160 179;
+
+  --accent: 122 107 242;
+  --accent-ink: 255 255 255;
+
+  --alive: 63 191 143;
+  --risk: 224 163 62;
+  --lapsed: 226 86 77;
+  --unknown: 93 113 134;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --base: 244 247 250;
+  --surface: 255 255 255;
+  --raised: 244 247 250;
+  --line: 220 227 234;
+  --ink: 22 33 43;
+  --muted: 92 111 128;
+
+  --accent: 91 75 214;
+  --accent-ink: 255 255 255;
+
+  --alive: 29 143 101;
+  --risk: 190 140 0;
+  --lapsed: 179 38 30;
+  --unknown: 122 139 154;
+}
+
+body {
+  @apply bg-base text-ink font-sans text-base antialiased;
+}
+
+/* Every number in a table is compared with the one above it. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One focus treatment, on the interactive colour, everywhere. */
+*:focus-visible {
+  @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
+}
+
+/* A person who has asked for less movement gets none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

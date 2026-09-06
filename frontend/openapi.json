@@ -1,0 +1,1779 @@
+{
+  "components": {
+    "schemas": {
+      "CaptureMethod": {
+        "description": "Where a stored session came from.",
+        "enum": [
+          "browser",
+          "import"
+        ],
+        "title": "CaptureMethod",
+        "type": "string"
+      },
+      "CheckOutcome": {
+        "description": "What one ping established.",
+        "enum": [
+          "ok",
+          "login_expired",
+          "pattern_missing",
+          "http_error",
+          "network_error"
+        ],
+        "title": "CheckOutcome",
+        "type": "string"
+      },
+      "CheckRead": {
+        "description": "One entry of a site's history.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "final_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Url"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/CheckOutcome"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "id",
+          "site_id",
+          "started_at",
+          "outcome",
+          "status_code",
+          "final_url",
+          "duration_ms",
+          "detail"
+        ],
+        "title": "CheckRead",
+        "type": "object"
+      },
+      "CookieImport": {
+        "description": "A session pasted in by hand.",
+        "properties": {
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CookieImport",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "description": "A login attempt.",
+        "properties": {
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LoginSessionRead": {
+        "description": "A live interactive-login session.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "ws_path": {
+            "title": "Ws Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "ws_path",
+          "width",
+          "height",
+          "expires_at"
+        ],
+        "title": "LoginSessionRead",
+        "type": "object"
+      },
+      "Message": {
+        "description": "A plain result for actions that have nothing else to say.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "Message",
+        "type": "object"
+      },
+      "PingMethod": {
+        "description": "How a site is pinged.",
+        "enum": [
+          "http",
+          "browser"
+        ],
+        "title": "PingMethod",
+        "type": "string"
+      },
+      "SessionRead": {
+        "description": "What is known about a stored session, without any of its secrets.",
+        "properties": {
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "captured_via": {
+            "$ref": "#/components/schemas/CaptureMethod"
+          },
+          "cookie_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cookie Names",
+            "type": "array"
+          },
+          "earliest_expiry": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Expiry"
+          },
+          "rotated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotated At"
+          }
+        },
+        "required": [
+          "captured_at",
+          "captured_via",
+          "rotated_at",
+          "earliest_expiry",
+          "cookie_names"
+        ],
+        "title": "SessionRead",
+        "type": "object"
+      },
+      "SettingsRead": {
+        "description": "The instance settings, as returned.",
+        "properties": {
+          "apprise_urls": {
+            "default": "",
+            "title": "Apprise Urls",
+            "type": "string"
+          },
+          "browser_idle_timeout_minutes": {
+            "default": 15,
+            "maximum": 240.0,
+            "minimum": 1.0,
+            "title": "Browser Idle Timeout Minutes",
+            "type": "integer"
+          },
+          "default_interval_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Default Interval Days",
+            "type": "integer"
+          },
+          "error_threshold": {
+            "default": 3,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Error Threshold",
+            "type": "integer"
+          },
+          "notify_cooldown_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 0.0,
+            "title": "Notify Cooldown Hours",
+            "type": "integer"
+          },
+          "notify_on_cookie_expiry": {
+            "default": true,
+            "title": "Notify On Cookie Expiry",
+            "type": "boolean"
+          },
+          "notify_on_deadline": {
+            "default": true,
+            "title": "Notify On Deadline",
+            "type": "boolean"
+          },
+          "notify_on_errors": {
+            "default": true,
+            "title": "Notify On Errors",
+            "type": "boolean"
+          },
+          "notify_on_lapsed": {
+            "default": true,
+            "title": "Notify On Lapsed",
+            "type": "boolean"
+          },
+          "notify_on_recovered": {
+            "default": true,
+            "title": "Notify On Recovered",
+            "type": "boolean"
+          },
+          "retention_days": {
+            "default": 90,
+            "maximum": 3650.0,
+            "minimum": 0.0,
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "warning_lead_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Warning Lead Days",
+            "type": "integer"
+          }
+        },
+        "title": "SettingsRead",
+        "type": "object"
+      },
+      "SettingsWrite": {
+        "description": "The instance settings a client may change.",
+        "properties": {
+          "apprise_urls": {
+            "default": "",
+            "title": "Apprise Urls",
+            "type": "string"
+          },
+          "browser_idle_timeout_minutes": {
+            "default": 15,
+            "maximum": 240.0,
+            "minimum": 1.0,
+            "title": "Browser Idle Timeout Minutes",
+            "type": "integer"
+          },
+          "default_interval_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Default Interval Days",
+            "type": "integer"
+          },
+          "error_threshold": {
+            "default": 3,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Error Threshold",
+            "type": "integer"
+          },
+          "notify_cooldown_hours": {
+            "default": 24,
+            "maximum": 8760.0,
+            "minimum": 0.0,
+            "title": "Notify Cooldown Hours",
+            "type": "integer"
+          },
+          "notify_on_cookie_expiry": {
+            "default": true,
+            "title": "Notify On Cookie Expiry",
+            "type": "boolean"
+          },
+          "notify_on_deadline": {
+            "default": true,
+            "title": "Notify On Deadline",
+            "type": "boolean"
+          },
+          "notify_on_errors": {
+            "default": true,
+            "title": "Notify On Errors",
+            "type": "boolean"
+          },
+          "notify_on_lapsed": {
+            "default": true,
+            "title": "Notify On Lapsed",
+            "type": "boolean"
+          },
+          "notify_on_recovered": {
+            "default": true,
+            "title": "Notify On Recovered",
+            "type": "boolean"
+          },
+          "retention_days": {
+            "default": 90,
+            "maximum": 3650.0,
+            "minimum": 0.0,
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "warning_lead_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Warning Lead Days",
+            "type": "integer"
+          }
+        },
+        "title": "SettingsWrite",
+        "type": "object"
+      },
+      "SetupRequest": {
+        "description": "The first-run wizard's submission.",
+        "properties": {
+          "password": {
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "username": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SetupRequest",
+        "type": "object"
+      },
+      "SetupState": {
+        "description": "Whether this instance still needs configuring.",
+        "properties": {
+          "setup_required": {
+            "title": "Setup Required",
+            "type": "boolean"
+          },
+          "token_required": {
+            "title": "Token Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "setup_required",
+          "token_required"
+        ],
+        "title": "SetupState",
+        "type": "object"
+      },
+      "SiteRead": {
+        "description": "A site as the UI shows it.",
+        "properties": {
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "expected_status": {
+            "default": 200,
+            "maximum": 599.0,
+            "minimum": 100.0,
+            "title": "Expected Status",
+            "type": "integer"
+          },
+          "failure_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Pattern"
+          },
+          "favicon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favicon"
+          },
+          "follow_redirects": {
+            "default": true,
+            "title": "Follow Redirects",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "inactivity_limit_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inactivity Limit Days"
+          },
+          "interval_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Interval Days",
+            "type": "integer"
+          },
+          "jitter_percent": {
+            "default": 10,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Jitter Percent",
+            "type": "integer"
+          },
+          "last_check_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Check At"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ok At"
+          },
+          "login_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url"
+          },
+          "login_url_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url Pattern"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "next_check_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Check At"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "ping_method": {
+            "$ref": "#/components/schemas/PingMethod",
+            "default": "http"
+          },
+          "ping_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Ping Url",
+            "type": "string"
+          },
+          "pulse": {
+            "items": {
+              "$ref": "#/components/schemas/CheckOutcome"
+            },
+            "title": "Pulse",
+            "type": "array"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SiteStatus"
+          },
+          "success_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pattern"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "name",
+          "ping_url",
+          "id",
+          "status",
+          "consecutive_failures",
+          "last_check_at",
+          "last_ok_at",
+          "next_check_at",
+          "deadline_at"
+        ],
+        "title": "SiteRead",
+        "type": "object"
+      },
+      "SiteStatus": {
+        "description": "How a site's session looked at its most recent check.",
+        "enum": [
+          "unknown",
+          "alive",
+          "at_risk",
+          "lapsed",
+          "error"
+        ],
+        "title": "SiteStatus",
+        "type": "string"
+      },
+      "SiteWrite": {
+        "description": "What a client may set on a site.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "expected_status": {
+            "default": 200,
+            "maximum": 599.0,
+            "minimum": 100.0,
+            "title": "Expected Status",
+            "type": "integer"
+          },
+          "failure_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Pattern"
+          },
+          "follow_redirects": {
+            "default": true,
+            "title": "Follow Redirects",
+            "type": "boolean"
+          },
+          "inactivity_limit_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inactivity Limit Days"
+          },
+          "interval_days": {
+            "default": 7,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Interval Days",
+            "type": "integer"
+          },
+          "jitter_percent": {
+            "default": 10,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Jitter Percent",
+            "type": "integer"
+          },
+          "login_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url"
+          },
+          "login_url_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url Pattern"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "ping_method": {
+            "$ref": "#/components/schemas/PingMethod",
+            "default": "http"
+          },
+          "ping_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Ping Url",
+            "type": "string"
+          },
+          "success_pattern": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pattern"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "name",
+          "ping_url"
+        ],
+        "title": "SiteWrite",
+        "type": "object"
+      },
+      "UserRead": {
+        "description": "Who is logged in.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "last_login_at"
+        ],
+        "title": "UserRead",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "summary": "Keep logged-in website sessions alive with scheduled pings",
+    "title": "lifeline",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "description": "Check a password and log the browser in.",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "description": "Log the browser out.",
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "description": "Who is logged in.\n\nWith authentication disabled there is no user to describe, so a placeholder is returned\nrather than a 401 the UI would read as \"log in\".",
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/browser/{token}": {
+      "delete": {
+        "description": "Abandon a login session without saving it.",
+        "operationId": "close_login_api_browser__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close Login",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/browser/{token}/save": {
+      "post": {
+        "description": "Store the session the live browser is holding, then close it.",
+        "operationId": "save_session_api_browser__token__save_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Session",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/checks": {
+      "get": {
+        "description": "The most recent checks across all sites, newest first.",
+        "operationId": "index_api_checks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CheckRead"
+                  },
+                  "title": "Response Index Api Checks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index",
+        "tags": [
+          "checks"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "Report that the process is up and its database is reachable.\n\nUnauthenticated, and it touches the database rather than only returning a constant: a\ncontainer that answers while its database is unopenable is not healthy, and a probe\nthat cannot tell the difference is worse than none.",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Api Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "description": "The current settings.",
+        "operationId": "show_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Show",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Replace the settings.",
+        "operationId": "update_api_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/test-notification": {
+      "post": {
+        "description": "Send a test message to every configured destination.",
+        "operationId": "test_notification_api_settings_test_notification_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Test Notification",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/setup": {
+      "get": {
+        "description": "Whether this instance still needs an administrator.",
+        "operationId": "state_api_setup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "State",
+        "tags": [
+          "setup"
+        ]
+      },
+      "post": {
+        "description": "Create the administrator and log the browser in.\n\nGuarded by a token printed to the container's log. This instance may be reachable from\nthe internet before anyone has configured it, and without the token whoever found the\nURL first would own it.",
+        "operationId": "complete_api_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/api/sites": {
+      "get": {
+        "description": "Every site, with the recent history the list displays.",
+        "operationId": "index_api_sites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SiteRead"
+                  },
+                  "title": "Response Index Api Sites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Index",
+        "tags": [
+          "sites"
+        ]
+      },
+      "post": {
+        "description": "Add a site.",
+        "operationId": "create_api_sites_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}": {
+      "delete": {
+        "description": "Remove a site, its stored session and its history.",
+        "operationId": "destroy_api_sites__site_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Destroy",
+        "tags": [
+          "sites"
+        ]
+      },
+      "get": {
+        "description": "One site.",
+        "operationId": "show_api_sites__site_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Show",
+        "tags": [
+          "sites"
+        ]
+      },
+      "put": {
+        "description": "Change a site's configuration.",
+        "operationId": "update_api_sites__site_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/check": {
+      "post": {
+        "description": "Ping a site immediately and return the result.",
+        "operationId": "check_now_api_sites__site_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Now",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/checks": {
+      "get": {
+        "description": "A site's recent checks, newest first.",
+        "operationId": "history_api_sites__site_id__checks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CheckRead"
+                  },
+                  "title": "Response History Api Sites  Site Id  Checks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/login-session": {
+      "post": {
+        "description": "Start a browser at the site's login page and stream its screen.",
+        "operationId": "open_login_api_sites__site_id__login_session_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginSessionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Login",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/session": {
+      "delete": {
+        "description": "Discard a site's stored session.",
+        "operationId": "forget_session_api_sites__site_id__session_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Session",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/session/import": {
+      "post": {
+        "description": "Store a session pasted in by hand.",
+        "operationId": "import_session_api_sites__site_id__session_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CookieImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Session",
+        "tags": [
+          "sites"
+        ]
+      }
+    }
+  }
+}
