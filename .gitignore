@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Runtime state: the SQLite database, the encryption key, browser profiles
+data/
+
+# Local overrides of the compose defaults
+.env
+
+# Coverage and test output
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+frontend/coverage/
+junit/
+.pytest_cache/
+# Staging directory the coverage publish step assembles (CI only)
+coverage-upload/
+# Shared coverage tooling, fetched on demand by `make coverage`
+.coverage-report.py
+
+# IntelliJ offline inspection output
+inspect/
+
+# Editor and OS junk (.idea/ and *.iml are tracked)
+*.swp
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
