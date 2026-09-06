@@ -1,0 +1,39 @@
+# The stack, as one service.
+#
+# Everything mutable lives in ./data: the SQLite database, the encryption key generated on
+# first boot, and one browser profile per site. Back that directory up and there is nothing
+# else to keep.
+services:
+  lifeline:
+    image: ghcr.io/jmerhar/lifeline:latest
+    build:
+      context: .
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+    container_name: lifeline
+    restart: unless-stopped
+    # A browser is a tree of processes, and PID 1 has to reap the ones it orphans.
+    init: true
+    # Runs as an ordinary user so the files under ./data belong to a real account on the
+    # host. Change it to match the owner of that directory.
+    user: "${LIFELINE_UID:-1000}:${LIFELINE_GID:-1000}"
+    # Chromium needs more shared memory than Docker's 64 MB default; without this it
+    # crashes on pages of any size.
+    shm_size: 512m
+    mem_limit: 2g
+    environment:
+      TZ: ${TZ:-UTC}
+      # Unset, a token is generated and printed to this container's log at startup, and the
+      # first-run wizard asks for it. Set it to `off` only on a network where the interface
+      # is not reachable by anyone else.
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # Unset, an encryption key is generated into ./data on first boot. Supply one to keep
+      # it outside the data directory; losing it means logging into every site again.
+      SECRET_KEY: ${SECRET_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      # Published on the loopback interface: put a reverse proxy in front of this rather than
+      # exposing it directly. Change to "8000:8000" to reach it from your network.
+      - "${LIFELINE_BIND:-127.0.0.1}:${LIFELINE_PORT:-8000}:8000"
+    volumes:
+      - ./data:/data

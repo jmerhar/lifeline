@@ -1,0 +1,48 @@
+# Development overrides: the API from the source tree, and Vite serving the interface.
+#
+# `make dev` runs both files. The API mounts src/ and reloads on change; the frontend runs
+# its own server on 5173 and proxies /api to the backend, so the interface hot-reloads
+# without a rebuild.
+services:
+  lifeline:
+    build:
+      context: .
+      target: app
+    # Root in development only: `pip install -e` writes into site-packages, and the mounted
+    # source tree belongs to the developer rather than to the container's user.
+    user: root
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    environment:
+      LOG_LEVEL: DEBUG
+      # The interface is served by Vite here, so the API serves no static files.
+      STATIC_DIR: ""
+      SETUP_TOKEN: dev-setup-token
+      SECRET_KEY: dev-secret-key-not-for-production
+    volumes:
+      - ./data:/data
+      - ./backend/src:/app/src
+      - ./backend/alembic:/app/alembic
+    command: ["--reload"]
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    # Vite needs to reach the API by service name from inside the compose network.
+    environment:
+      VITE_API_TARGET: http://lifeline:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      # node_modules lives in a volume of its own rather than in the mounted tree: the
+      # container installs Linux binaries, and letting those land in the working copy breaks
+      # running the tests on the host afterwards.
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm ci --loglevel=error && npx vite --host 0.0.0.0 --port 5173"
+    depends_on:
+      lifeline:
+        condition: service_started
+
+volumes:
+  frontend_node_modules:
