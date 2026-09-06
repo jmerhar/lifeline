@@ -1,0 +1,247 @@
+"""Managing sites, their sessions and their history."""
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from datetime import timedelta
+
+from ...models import CaptureMethod, Site
+from ...schemas import (
+    CheckRead,
+    CookieImport,
+    LoginSessionRead,
+    Message,
+    SessionRead,
+    SiteRead,
+    SiteWrite,
+)
+from ...services import favicon
+from ...services.browser.driver import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
+from ...services.browser.manager import BrowserUnavailable
+from ...services.cookies import CookieParseError, parse_import
+from ...services.store import (
+    get_site,
+    list_sites,
+    load_settings_row,
+    pulse_for_sites,
+    recent_checks,
+)
+from ..deps import DbDep, ServicesDep, require_setup_complete, require_user
+
+router = APIRouter(
+    prefix="/sites",
+    tags=["sites"],
+    dependencies=[Depends(require_setup_complete), Depends(require_user)],
+)
+
+# How many recent checks the pulse strip shows.
+PULSE_LENGTH = 12
+# The default page of history for one site.
+HISTORY_LENGTH = 50
+
+
+def to_read(site: Site, pulse: list[str] | None = None) -> SiteRead:
+    """Render a site for the API, with its derived fields."""
+    stored = site.session
+    session = None
+    if stored is not None:
+        session = SessionRead(
+            captured_at=stored.captured_at,
+            captured_via=stored.captured_via,
+            rotated_at=stored.rotated_at,
+            earliest_expiry=stored.earliest_expiry,
+            cookie_names=[name for name in stored.cookie_names.split(",") if name],
+        )
+    return SiteRead(
+        id=site.id,
+        name=site.name,
+        ping_url=site.ping_url,
+        login_url=site.login_url,
+        enabled=site.enabled,
+        interval_days=site.interval_days,
+        jitter_percent=site.jitter_percent,
+        ping_method=site.ping_method,
+        user_agent=site.user_agent,
+        favicon=site.favicon,
+        expected_status=site.expected_status,
+        follow_redirects=site.follow_redirects,
+        login_url_pattern=site.login_url_pattern,
+        success_pattern=site.success_pattern,
+        failure_pattern=site.failure_pattern,
+        inactivity_limit_days=site.inactivity_limit_days,
+        notes=site.notes,
+        status=site.status,
+        consecutive_failures=site.consecutive_failures,
+        last_check_at=site.last_check_at,
+        last_ok_at=site.last_ok_at,
+        next_check_at=site.next_check_at,
+        deadline_at=site.deadline_at,
+        session=session,
+        pulse=pulse or [],
+    )
+
+
+async def load_site(db: DbDep, site_id: int) -> Site:
+    site = await get_site(db, site_id)
+    if site is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no such site")
+    return site
+
+
+@router.get("")
+async def index(db: DbDep) -> list[SiteRead]:
+    """Every site, with the recent history the list displays."""
+    sites = await list_sites(db)
+    pulse = await pulse_for_sites(db, PULSE_LENGTH)
+    return [to_read(site, pulse.get(site.id, [])) for site in sites]
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create(payload: SiteWrite, db: DbDep, services: ServicesDep) -> SiteRead:
+    """Add a site."""
+    if await _name_taken(db, payload.name):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="a site with that name already exists"
+        )
+    site = Site(**payload.model_dump())
+    # A new site has no captured session. Stated rather than left unset, because reading an
+    # unset relationship would send SQLAlchemy off to load it during attribute access, which
+    # its async session cannot do.
+    site.session = None
+    site.favicon = await _fetch_icon(services, site.ping_url)
+    db.add(site)
+    await db.flush()
+    return to_read(site)
+
+
+@router.get("/{site_id}")
+async def show(site_id: int, db: DbDep) -> SiteRead:
+    """One site."""
+    site = await load_site(db, site_id)
+    pulse = await pulse_for_sites(db, PULSE_LENGTH)
+    return to_read(site, pulse.get(site.id, []))
+
+
+@router.put("/{site_id}")
+async def update(site_id: int, payload: SiteWrite, db: DbDep, services: ServicesDep) -> SiteRead:
+    """Change a site's configuration."""
+    site = await load_site(db, site_id)
+    if payload.name != site.name and await _name_taken(db, payload.name):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="a site with that name already exists"
+        )
+    previous_url = site.ping_url
+    for field, value in payload.model_dump().items():
+        setattr(site, field, value)
+    if site.ping_url != previous_url or not site.favicon:
+        site.favicon = await _fetch_icon(services, site.ping_url)
+    await db.flush()
+    return to_read(site)
+
+
+@router.delete("/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def destroy(site_id: int, db: DbDep, services: ServicesDep) -> None:
+    """Remove a site, its stored session and its history."""
+    site = await load_site(db, site_id)
+    await db.delete(site)
+    # The browser profile is not in the database, so deleting the row would otherwise leave
+    # the cookies on disk after the site was apparently removed.
+    _remove_profile(services, site_id)
+
+
+@router.get("/{site_id}/checks")
+async def history(site_id: int, db: DbDep, limit: int = HISTORY_LENGTH) -> list[CheckRead]:
+    """A site's recent checks, newest first."""
+    await load_site(db, site_id)
+    checks = await recent_checks(db, site_id, min(max(limit, 1), 500))
+    return [CheckRead.model_validate(check) for check in checks]
+
+
+@router.post("/{site_id}/check")
+async def check_now(site_id: int, db: DbDep, services: ServicesDep) -> CheckRead:
+    """Ping a site immediately and return the result."""
+    await load_site(db, site_id)
+    # Committed before handing over: the runner works in its own session, and an uncommitted
+    # change here would not be visible to it.
+    await db.commit()
+    check = await services.runner.run(site_id)
+    if check is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no such site")
+    return CheckRead.model_validate(check)
+
+
+@router.post("/{site_id}/session/import")
+async def import_session(
+    site_id: int, payload: CookieImport, db: DbDep, services: ServicesDep
+) -> Message:
+    """Store a session pasted in by hand."""
+    site = await load_site(db, site_id)
+    try:
+        state = parse_import(payload.text, site.ping_url)
+    except CookieParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    await db.commit()
+    await services.runner.store_session(
+        site_id, state, CaptureMethod.IMPORT, user_agent=payload.user_agent
+    )
+    return Message(detail="session imported")
+
+
+@router.post("/{site_id}/login-session")
+async def open_login(site_id: int, db: DbDep, services: ServicesDep) -> LoginSessionRead:
+    """Start a browser at the site's login page and stream its screen."""
+    site = await load_site(db, site_id)
+    row = await load_settings_row(db)
+    try:
+        session = await services.browser.open_login(
+            site_id,
+            site.effective_login_url,
+            timedelta(minutes=row.browser_idle_timeout_minutes),
+        )
+    except BrowserUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    return LoginSessionRead(
+        site_id=site_id,
+        ws_path=f"/api/browser/{session.token}/ws",
+        width=VIEWPORT_WIDTH,
+        height=VIEWPORT_HEIGHT,
+        expires_at=session.expires_at,
+    )
+
+
+@router.delete("/{site_id}/session")
+async def forget_session(site_id: int, db: DbDep, services: ServicesDep) -> Message:
+    """Discard a site's stored session."""
+    site = await load_site(db, site_id)
+    if site.session is not None:
+        await db.delete(site.session)
+    _remove_profile(services, site_id)
+    return Message(detail="session discarded")
+
+
+async def _name_taken(db: DbDep, name: str) -> bool:
+    from sqlalchemy import select
+
+    result = await db.execute(select(Site.id).where(Site.name == name))
+    return result.first() is not None
+
+
+async def _fetch_icon(services: ServicesDep, url: str) -> str | None:
+    """Best-effort icon fetch, which must never stop a site being saved."""
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        follow_redirects=True,
+        headers={"User-Agent": services.settings.default_user_agent},
+    ) as client:
+        return await favicon.fetch(url, client=client)
+
+
+def _remove_profile(services: ServicesDep, site_id: int) -> None:
+    """Delete a site's browser profile from disk."""
+    import shutil
+
+    shutil.rmtree(services.browser.profile_dir(site_id), ignore_errors=True)
