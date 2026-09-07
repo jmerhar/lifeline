@@ -31,7 +31,9 @@ coverage-upload/
 # IntelliJ offline inspection output
 inspect/
 
-# Editor and OS junk (.idea/ and *.iml are tracked)
+# Editor and OS junk
+.idea/
+*.iml
 *.swp
 .DS_Store
 
