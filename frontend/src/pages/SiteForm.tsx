@@ -140,21 +140,26 @@ export function SiteForm({
               <Input
                 value={draft.login_url_pattern ?? ""}
                 onChange={(event) => set("login_url_pattern", text(event.target.value))}
-                placeholder="login.php"
+                placeholder="e.g. login.php"
+                autoComplete="off"
               />
             </Field>
             <Field label="Page must contain" hint="Something only a logged-in page shows.">
               <Input
                 value={draft.success_pattern ?? ""}
                 onChange={(event) => set("success_pattern", text(event.target.value))}
-                placeholder="Log out"
+                placeholder="e.g. Log out"
+                autoComplete="off"
               />
             </Field>
             <Field label="Page must not contain" hint="Something only a logged-out page shows.">
               <Input
                 value={draft.failure_pattern ?? ""}
                 onChange={(event) => set("failure_pattern", text(event.target.value))}
-                placeholder="Enter your password"
+                // An example, not an instruction: unprefixed, this field reads as asking the
+                // person to type their password into it — and a browser may offer to fill it in.
+                placeholder="e.g. Enter your password"
+                autoComplete="off"
               />
             </Field>
             <Field label="Expected status" hint="The HTTP status a good response has.">

@@ -289,3 +289,30 @@ describe("Sites", () => {
     expect(screen.getByText("example").closest("tr")).toHaveClass("opacity-60");
   });
 });
+
+describe("the site form's examples", () => {
+  it("labels the pattern examples as examples", async () => {
+    // "Enter your password" as a bare placeholder reads as an instruction to type one — in a form
+    // where a password field would be entirely plausible.
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+
+    for (const label of [/Login page looks like/, /Page must contain/, /Page must not contain/]) {
+      expect(form.getByLabelText(label)).toHaveAttribute(
+        "placeholder",
+        expect.stringMatching(/^e\.g\. /),
+      );
+    }
+  });
+
+  it("keeps a browser from autofilling a password into a pattern field", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.getByLabelText(/Page must not contain/)).toHaveAttribute("autocomplete", "off");
+  });
+});
