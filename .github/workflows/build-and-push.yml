@@ -131,6 +131,9 @@ jobs:
       - name: ShellCheck
         run: shellcheck bin/*.sh
 
+      - name: Lockfile resolves only to the public registry
+        run: bin/check-lockfile.sh
+
   coverage:
     # Joins both suites into one summary, gate, Codecov upload and publish. The suites run in
     # separate jobs, so this is where their reports are brought together.

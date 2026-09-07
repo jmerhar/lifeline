@@ -91,8 +91,8 @@ db-shell: ## Open a SQLite shell on the development database
 node-modules: ## Reinstall the frontend packages
 	cd frontend && rm -rf node_modules && npm install --no-fund --no-audit
 
-lockfile: ## Regenerate package-lock.json
-	cd frontend && rm -f package-lock.json && npm install --package-lock-only --no-fund --no-audit
+lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
+	bin/lockfile.sh
 
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \

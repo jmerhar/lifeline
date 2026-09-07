@@ -17,5 +17,6 @@ run() {
 run "shellcheck" shellcheck bin/*.sh
 run "frontend types" sh -c 'cd frontend && npx tsc -b --force'
 run "frontend lint" sh -c 'cd frontend && npx eslint .'
+run "lockfile" bin/check-lockfile.sh
 
 exit "$status"
