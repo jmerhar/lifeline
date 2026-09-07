@@ -188,6 +188,12 @@ class Notifier:
         delivered = await self._sender.send(urls, message.title, message.body)
         if delivered:
             self._last_sent[key] = now
+            logger.info(
+                "notified about %s%s via %s",
+                event,
+                f" for {site.name}" if site else "",
+                ", ".join(_redact(url) for url in urls),
+            )
         else:
             logger.warning("no destination accepted the %s notification", event)
         return delivered

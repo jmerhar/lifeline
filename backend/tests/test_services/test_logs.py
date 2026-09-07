@@ -108,3 +108,61 @@ class TestApplyLevel:
         written = path.read_text()
         assert "too quiet to keep" not in written
         assert "loud enough" in written
+
+
+class TestWireLoggersStayQuiet:
+    def test_httpcore_is_held_at_info_even_at_debug(self, settings: Settings) -> None:
+        # It logs response headers at DEBUG, and on a site that re-issues its session cookie on
+        # every request that means writing a live credential to disk.
+        logs.configure(settings)
+
+        logs.apply_level("DEBUG")
+
+        assert logging.getLogger().level == logging.DEBUG
+        assert logging.getLogger("httpcore").level == logging.INFO
+
+    def test_httpcore_follows_a_raised_level(self, settings: Settings) -> None:
+        # Pinned at the bottom, not fixed: asking for less should still give less.
+        logs.configure(settings)
+
+        logs.apply_level("ERROR")
+
+        assert logging.getLogger("httpcore").level == logging.ERROR
+
+    def test_configuring_at_debug_also_pins_it(self, data_dir: Path) -> None:
+        logs.configure(Settings(data_dir=data_dir, log_level="DEBUG"))
+
+        assert logging.getLogger("httpcore").level == logging.INFO
+
+    async def test_a_reissued_cookie_never_reaches_the_log(self, settings: Settings) -> None:
+        # The regression this guards: the log file sits beside the database whose whole purpose is
+        # to keep these values encrypted.
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        import httpx
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - the name the server dispatches to
+                self.send_response(200)
+                self.send_header("Set-Cookie", "session=ROTATED-SECRET-VALUE; Path=/")
+                self.end_headers()
+                self.wfile.write(b"ok")
+
+            def log_message(self, *_: object) -> None:
+                """Keep the test output readable."""
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        path = logs.configure(settings)
+        logs.apply_level("DEBUG")
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.get(f"http://127.0.0.1:{server.server_port}/")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        assert "ROTATED-SECRET-VALUE" not in path.read_text()

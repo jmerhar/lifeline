@@ -180,7 +180,7 @@ export function Settings() {
           </Field>
           <Field
             label="Log detail"
-            hint="Takes effect at once. Debug is for watching something go wrong."
+            hint="Takes effect at once. Written to logs/lifeline.log beside the database, and to the container's output."
           >
             <Select
               value={draft.log_level}
@@ -188,8 +188,8 @@ export function Settings() {
                 set("log_level", event.target.value as SettingsPayload["log_level"])
               }
             >
-              <option value="DEBUG">Debug — every request and check</option>
-              <option value="INFO">Info — the usual</option>
+              <option value="DEBUG">Debug — also why each check decided what it did</option>
+              <option value="INFO">Info — every request, check and change of state</option>
               <option value="WARNING">Warning — only what needs attention</option>
               <option value="ERROR">Error — only failures</option>
             </Select>

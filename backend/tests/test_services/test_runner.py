@@ -1,5 +1,6 @@
 """Applying a check to the database: status, history, rotation and notifications."""
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -460,3 +461,104 @@ class TestUnavailableMethod:
 
         with pytest.raises(RuntimeError, match="not available"):
             await runner.run(logged_in_site.id, now=NOW)
+
+
+class TestLogging:
+    async def test_info_records_every_check(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # The line a person looks for. Before this existed, a successful check wrote nothing from
+        # the application at all — only an incidental line from the HTTP client.
+        with caplog.at_level(logging.INFO, logger="lifeline.services.runner"):
+            await make_runner().run(logged_in_site.id, now=NOW)
+
+        assert any("checked example: ok" in message for message in caplog.messages)
+
+    async def test_info_records_a_change_of_state(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        logged_in_site.status = SiteStatus.LAPSED
+        await db.commit()
+
+        with caplog.at_level(logging.INFO, logger="lifeline.services.runner"):
+            await make_runner().run(logged_in_site.id, now=NOW)
+
+        assert any("lapsed -> alive" in message for message in caplog.messages)
+
+    async def test_info_says_nothing_when_the_state_is_unchanged(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        logged_in_site.status = SiteStatus.ALIVE
+        await db.commit()
+
+        with caplog.at_level(logging.INFO, logger="lifeline.services.runner"):
+            await make_runner().run(logged_in_site.id, now=NOW)
+
+        assert not any("->" in message for message in caplog.messages)
+
+    async def test_debug_adds_the_reasoning(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        logged_in_site.login_url_pattern = "login.php"
+        await db.commit()
+        runner = make_runner(make_fetch_result(final_url="https://example.org/login.php"))
+
+        with caplog.at_level(logging.DEBUG, logger="lifeline.services.runner"):
+            await runner.run(logged_in_site.id, now=NOW)
+
+        joined = "\n".join(caplog.messages)
+        assert "ended at https://example.org/login.php" in joined
+        assert "matches the site's login page" in joined
+
+    async def test_debug_never_records_a_cookie_value(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # Cookie names are useful in a log; the values are the session itself. The value here is
+        # deliberately not a word the log uses for anything else.
+        secret = "UNMISTAKABLE-COOKIE-VALUE"
+        state = {
+            "cookies": [{**ROTATED_STATE["cookies"][0], "value": secret}],
+            "origins": [],
+        }
+        runner = make_runner(make_fetch_result(state=state, rotated=True))
+
+        with caplog.at_level(logging.DEBUG, logger="lifeline.services.runner"):
+            await runner.run(logged_in_site.id, now=NOW)
+
+        joined = "\n".join(caplog.messages)
+        assert "cookies session" in joined
+        assert secret not in joined
+
+    async def test_info_records_a_captured_session(
+        self,
+        db: AsyncSession,
+        site: Site,
+        make_runner: Callable[..., CheckRunner],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        with caplog.at_level(logging.INFO, logger="lifeline.services.runner"):
+            await make_runner().store_session(
+                site.id, ROTATED_STATE, CaptureMethod.BROWSER, now=NOW
+            )
+
+        assert any("stored a session for example" in message for message in caplog.messages)

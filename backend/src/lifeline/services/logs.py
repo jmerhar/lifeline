@@ -25,6 +25,16 @@ BACKUP_COUNT = 5
 
 LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 
+# Loggers whose own level is set alongside the root, because they hold one of their own and would
+# otherwise keep whatever they were given at startup.
+_FOLLOW_ROOT = ("uvicorn", "uvicorn.access", "uvicorn.error", "httpx")
+
+# Held at INFO however low the application goes. httpcore logs response headers at DEBUG, and on a
+# site that re-issues its session cookie on every request that means writing a live credential into
+# the log file — undoing the point of encrypting the session in the database. Debug here is for
+# lifeline's own reasoning, not a wire dump.
+_NEVER_BELOW_INFO = ("httpcore",)
+
 # Marks the handlers this module installed, so repeated calls replace them rather than stacking a
 # second copy that logs every line twice.
 _MARKER = "lifeline"
@@ -44,6 +54,8 @@ def configure(settings: Settings, level: str | None = None) -> Path | None:
     """
     root = logging.getLogger()
     root.setLevel(_resolve(level or settings.log_level))
+    for name in _NEVER_BELOW_INFO:
+        logging.getLogger(name).setLevel(max(root.level, logging.INFO))
 
     for handler in [h for h in root.handlers if getattr(h, _MARKER, False)]:
         root.removeHandler(handler)
@@ -83,8 +95,10 @@ def apply_level(level: str) -> None:
     """
     resolved = _resolve(level)
     logging.getLogger().setLevel(resolved)
-    for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "httpx"):
+    for name in _FOLLOW_ROOT:
         logging.getLogger(name).setLevel(resolved)
+    for name in _NEVER_BELOW_INFO:
+        logging.getLogger(name).setLevel(max(resolved, logging.INFO))
 
 
 def _resolve(level: str) -> int:

@@ -151,11 +151,22 @@ describe("the log level", () => {
     expect(saved[0]!.log_level).toBe("DEBUG");
   });
 
-  it("says that a change applies at once", async () => {
+  it("says that a change applies at once, and where the log goes", async () => {
     // The reason to raise it is to watch something happening now, so it would be no use if it
-    // needed a restart.
+    // needed a restart — and a log nobody can find is no use either.
     render(<Settings />);
 
-    expect(await screen.findByText(/Takes effect at once/)).toBeInTheDocument();
+    const hint = await screen.findByText(/Takes effect at once/);
+    expect(hint).toHaveTextContent("logs/lifeline.log");
+  });
+
+  it("describes info as covering every check, not just debug", async () => {
+    // The first wording put checks at debug level, which was both wrong and a description of a
+    // gap: the application logged nothing of its own per check.
+    render(<Settings />);
+    await screen.findByLabelText("Log detail");
+
+    expect(screen.getByRole("option", { name: /^Info/ })).toHaveTextContent("every request, check");
+    expect(screen.getByRole("option", { name: /^Debug/ })).toHaveTextContent("why each check");
   });
 })

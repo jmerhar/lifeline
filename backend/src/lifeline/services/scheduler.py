@@ -63,6 +63,8 @@ class Scheduler:
                     # Re-logging in pushes the deadline out again.
                     site.status = SiteStatus.ALIVE
                     continue
+                if site.status is not SiteStatus.AT_RISK:
+                    logger.info("%s is running out of time: %s", site.name, reason)
                 site.status = SiteStatus.AT_RISK
                 pending.append((site, reason))
             await session.commit()

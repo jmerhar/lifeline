@@ -104,6 +104,22 @@ class CheckRunner:
             events = self._apply(site, report, settings_row, now)
             await session.commit()
 
+        logger.info(
+            "checked %s: %s in %dms",
+            site.name,
+            report.verdict.outcome,
+            report.duration_ms,
+        )
+        logger.debug(
+            "  %s: asked %s, ended at %s, HTTP %s, session %s%s",
+            site.name,
+            site.ping_url,
+            report.final_url or "nowhere",
+            report.status_code if report.status_code is not None else "-",
+            "rotated" if report.rotated else "unchanged",
+            f", because {report.verdict.detail}" if report.verdict.detail else "",
+        )
+
         for event, detail in events:
             await self._notifier.notify(settings_row, event, site, detail, now=now)
         return check
@@ -125,6 +141,13 @@ class CheckRunner:
 
         if report.rotated and report.state is not None and site.session is not None:
             self._save_state(site.session, report.state, now)
+            # Names only. The values are what the session is, and a log file is not where they go.
+            logger.debug(
+                "  %s: stored the reissued session; cookies %s, earliest expiry %s",
+                site.name,
+                ",".join(cookie_names(report.state)),
+                site.session.earliest_expiry,
+            )
         return check
 
     def _save_state(self, stored: SiteSession, state: StorageState, now: datetime) -> None:
@@ -151,6 +174,15 @@ class CheckRunner:
 
         # After the failure count is updated, so a failing site's backoff grows.
         site.next_check_at = next_check_time(site, outcome, now=now)
+
+        if site.status is not previous:
+            logger.info("%s: %s -> %s", site.name, previous, site.status)
+        logger.debug(
+            "  %s: next check %s, consecutive failures %d",
+            site.name,
+            site.next_check_at,
+            site.consecutive_failures,
+        )
 
         events: list[tuple[Event, str | None]] = []
         if site.status in _LOGGED_OUT_STATUSES and previous not in _LOGGED_OUT_STATUSES:
@@ -183,6 +215,11 @@ class CheckRunner:
         async with self._sessionmaker() as session:
             due = await due_sites(session, now)
             site_ids = [site.id for site in due]
+
+        if site_ids:
+            logger.info("%d site(s) due for a check", len(site_ids))
+        else:
+            logger.debug("nothing due")
 
         for site_id in site_ids:
             try:
@@ -222,6 +259,12 @@ class CheckRunner:
             site.consecutive_failures = 0
             site.next_check_at = None
             await session.commit()
+            logger.info(
+                "stored a session for %s captured via %s, with %d cookie(s)",
+                site.name,
+                captured_via,
+                len(cookie_names(state)),
+            )
         # Cooldowns from the previous session would silence the message that says whether
         # this login actually worked.
         self._notifier.forget(site_id)
