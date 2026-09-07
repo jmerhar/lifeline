@@ -67,8 +67,12 @@ async def stream(websocket: WebSocket, token: str) -> None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # noVNC negotiates the "binary" subprotocol; refusing it leaves the client waiting.
-    await websocket.accept(subprotocol="binary")
+    # Only ever echo back a subprotocol the client actually offered. A server that names one
+    # the client did not ask for makes the browser fail the connection outright (RFC 6455 §4.1),
+    # which surfaces as the stream dropping the instant it opens — and noVNC asks for none by
+    # default, so naming one unconditionally breaks every login.
+    offered = websocket.scope.get("subprotocols") or []
+    await websocket.accept(subprotocol="binary" if "binary" in offered else None)
     try:
         reader, writer = await asyncio.open_connection("127.0.0.1", session.rfb_port)
     except OSError:

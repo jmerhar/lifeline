@@ -127,9 +127,12 @@ class AsgiWebSocket:
     messages, and it keeps the route, the bridge and the fake VNC server in one event loop.
     """
 
-    def __init__(self, app: object, path: str) -> None:
+    def __init__(self, app: object, path: str, subprotocols: list[str] | None = None) -> None:
         self._app = app
         self._path = path
+        # Empty by default, because that is what noVNC sends. Offering what the server happens
+        # to want would make this test agree with the code rather than with the real client.
+        self._subprotocols = subprotocols if subprotocols is not None else []
         self._to_app: asyncio.Queue[dict] = asyncio.Queue()
         self._from_app: asyncio.Queue[dict] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
@@ -149,7 +152,7 @@ class AsgiWebSocket:
             "headers": [(b"host", b"lifeline.test")],
             "client": ("127.0.0.1", 12345),
             "server": ("lifeline.test", 80),
-            "subprotocols": ["binary"],
+            "subprotocols": self._subprotocols,
             # The route reads websocket.app.state to reach the services.
             "app": self._app,
         }
@@ -157,6 +160,7 @@ class AsgiWebSocket:
         await self._to_app.put({"type": "websocket.connect"})
         first = await asyncio.wait_for(self._from_app.get(), timeout=5)
         self.accepted = first["type"] == "websocket.accept"
+        self.subprotocol = first.get("subprotocol")
         if not self.accepted:
             self.close_message = first
         return self
@@ -240,6 +244,31 @@ class TestStream:
                 await websocket.send_bytes(b"hello")
 
                 assert await websocket.receive_bytes() == b"echo:hello"
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    async def test_names_no_subprotocol_when_the_client_offered_none(self, app, services) -> None:
+        # What noVNC does. A server that answers with one the client never offered makes the
+        # browser fail the connection, and the login panel shows the stream dropping at once.
+        server, port = await start_echo_server()
+        session = install_session(services, port)
+        try:
+            async with AsgiWebSocket(app, f"/api/browser/{session.token}/ws") as websocket:
+                assert websocket.accepted is True
+                assert websocket.subprotocol is None
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    async def test_echoes_the_subprotocol_when_one_is_offered(self, app, services) -> None:
+        server, port = await start_echo_server()
+        session = install_session(services, port)
+        try:
+            async with AsgiWebSocket(
+                app, f"/api/browser/{session.token}/ws", subprotocols=["binary"]
+            ) as websocket:
+                assert websocket.subprotocol == "binary"
         finally:
             server.close()
             await server.wait_closed()
