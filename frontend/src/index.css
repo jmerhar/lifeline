@@ -15,7 +15,7 @@
 :root {
   color-scheme: dark;
 
-  --base: 16 24 34;
+  --canvas: 16 24 34;
   --surface: 24 34 46;
   --raised: 33 45 59;
   --line: 38 51 63;
@@ -34,7 +34,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --base: 244 247 250;
+  --canvas: 244 247 250;
   --surface: 255 255 255;
   --raised: 244 247 250;
   --line: 220 227 234;
@@ -51,7 +51,7 @@
 }
 
 body {
-  @apply bg-base text-ink font-sans text-base antialiased;
+  @apply bg-canvas text-ink font-sans text-base antialiased;
 }
 
 /* Every number in a table is compared with the one above it. */
@@ -61,7 +61,7 @@ body {
 
 /* One focus treatment, on the interactive colour, everywhere. */
 *:focus-visible {
-  @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
+  @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-canvas;
 }
 
 /* A person who has asked for less movement gets none of it. */

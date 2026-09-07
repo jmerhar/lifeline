@@ -95,7 +95,7 @@ interface ControlProps {
   "aria-describedby"?: string;
 }
 
-const inputClasses = `w-full rounded border border-line bg-base px-2.5 py-1.5 text-small
+const inputClasses = `w-full rounded border border-line bg-canvas px-2.5 py-1.5 text-small
   text-ink placeholder:text-muted/70`;
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {

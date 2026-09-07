@@ -143,7 +143,7 @@ function BrowserTab({
           className="aspect-[16/10] w-full overflow-hidden rounded border border-line"
         />
       ) : (
-        <div className="flex aspect-[16/10] w-full items-center justify-center rounded border border-line bg-base text-small text-muted">
+        <div className="flex aspect-[16/10] w-full items-center justify-center rounded border border-line bg-canvas text-small text-muted">
           {error ? "Nothing to show." : "Starting a browser…"}
         </div>
       )}

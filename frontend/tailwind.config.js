@@ -9,7 +9,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        base: "rgb(var(--base) / <alpha-value>)",
+        // Named canvas, not base: `text-` is one namespace for both colours and font
+        // sizes, so a colour called "base" makes `text-base` mean the body font size AND
+        // the page background colour. Tailwind emits both, the colour wins, and every
+        // element without an explicit colour is painted the same shade as its background.
+        canvas: "rgb(var(--canvas) / <alpha-value>)",
         surface: "rgb(var(--surface) / <alpha-value>)",
         raised: "rgb(var(--raised) / <alpha-value>)",
         line: "rgb(var(--line) / <alpha-value>)",
