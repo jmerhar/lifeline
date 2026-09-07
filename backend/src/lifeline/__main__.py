@@ -9,6 +9,7 @@ import sys
 import uvicorn
 
 from .config import get_settings
+from .services import logs
 
 # Where uvicorn binds inside the container. The port is published to the host by the compose
 # file, which is where a deployment decides what is reachable from outside.
@@ -19,6 +20,7 @@ PORT = 8000
 def main(argv: list[str] | None = None) -> None:
     """Serve the application, reloading on source changes when asked to."""
     settings = get_settings()
+    logs.configure(settings)
     reload = "--reload" in (argv if argv is not None else sys.argv[1:])
     uvicorn.run(
         # Reloading requires an import string rather than a built application: the worker is
@@ -28,7 +30,9 @@ def main(argv: list[str] | None = None) -> None:
         reload=reload,
         host=HOST,
         port=PORT,
-        log_level=settings.log_level.lower(),
+        # Left to configure logging itself, uvicorn installs its own handlers and stops its
+        # loggers propagating, so none of its request logging would reach the file.
+        log_config=None,
         # The login stream is a websocket; uvicorn[standard] supplies the implementation.
         ws="auto",
     )

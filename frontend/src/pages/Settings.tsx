@@ -11,7 +11,17 @@ import { useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import type { Settings as SettingsPayload } from "../api/types";
-import { Button, Card, Field, Input, Problem, Spinner, TextArea, Toggle } from "../components/ui";
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  Problem,
+  Select,
+  Spinner,
+  TextArea,
+  Toggle,
+} from "../components/ui";
 
 export function Settings() {
   const client = useQueryClient();
@@ -167,6 +177,22 @@ export function Settings() {
                 set("browser_idle_timeout_minutes", Number(event.target.value))
               }
             />
+          </Field>
+          <Field
+            label="Log detail"
+            hint="Takes effect at once. Debug is for watching something go wrong."
+          >
+            <Select
+              value={draft.log_level}
+              onChange={(event) =>
+                set("log_level", event.target.value as SettingsPayload["log_level"])
+              }
+            >
+              <option value="DEBUG">Debug — every request and check</option>
+              <option value="INFO">Info — the usual</option>
+              <option value="WARNING">Warning — only what needs attention</option>
+              <option value="ERROR">Error — only failures</option>
+            </Select>
           </Field>
         </div>
       </Card>

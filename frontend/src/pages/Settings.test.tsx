@@ -130,3 +130,32 @@ describe("Settings", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be loaded");
   });
 });
+
+describe("the log level", () => {
+  it("saves a change", async () => {
+    const saved: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/settings", async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        saved.push(body);
+        return HttpResponse.json(body);
+      }),
+    );
+    render(<Settings />);
+    await screen.findByLabelText("Log detail");
+
+    await userEvent.selectOptions(screen.getByLabelText("Log detail"), "DEBUG");
+    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]!.log_level).toBe("DEBUG");
+  });
+
+  it("says that a change applies at once", async () => {
+    // The reason to raise it is to watch something happening now, so it would be no use if it
+    // needed a restart.
+    render(<Settings />);
+
+    expect(await screen.findByText(/Takes effect at once/)).toBeInTheDocument();
+  });
+})

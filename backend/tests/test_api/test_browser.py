@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lifeline.models import Site, User
-from tests.conftest import SAMPLE_STATE
+from tests.conftest import SAMPLE_STATE, EchoServer
 
 
 @pytest.fixture
@@ -180,23 +180,6 @@ class AsgiWebSocket:
         return message["bytes"]
 
 
-async def start_echo_server() -> tuple[asyncio.Server, int]:
-    """A TCP server standing in for x11vnc."""
-
-    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        writer.write(b"RFB 003.008\n")
-        await writer.drain()
-        try:
-            while data := await reader.read(1024):
-                writer.write(b"echo:" + data)
-                await writer.drain()
-        finally:
-            writer.close()
-
-    server = await asyncio.start_server(handle, "127.0.0.1", 0)
-    return server, server.sockets[0].getsockname()[1]
-
-
 def unused_port() -> int:
     """A port with nothing listening on it."""
     with socket.socket() as probe:
@@ -233,58 +216,52 @@ def install_session(services, rfb_port: int):
 
 
 class TestStream:
+    GREETING = b"RFB 003.008\n"
+
     async def test_carries_the_vnc_protocol_both_ways(self, app, services) -> None:
-        server, port = await start_echo_server()
-        session = install_session(services, port)
-        try:
+        async with EchoServer(greeting=self.GREETING) as vnc:
+            session = install_session(services, vnc.port)
+
             async with AsgiWebSocket(app, f"/api/browser/{session.token}/ws") as websocket:
                 assert websocket.accepted is True
-                assert await websocket.receive_bytes() == b"RFB 003.008\n"
+                assert await websocket.receive_bytes() == self.GREETING
 
                 await websocket.send_bytes(b"hello")
 
                 assert await websocket.receive_bytes() == b"echo:hello"
-        finally:
-            server.close()
-            await server.wait_closed()
 
     async def test_names_no_subprotocol_when_the_client_offered_none(self, app, services) -> None:
         # What noVNC does. A server that answers with one the client never offered makes the
         # browser fail the connection, and the login panel shows the stream dropping at once.
-        server, port = await start_echo_server()
-        session = install_session(services, port)
-        try:
+        async with EchoServer(greeting=self.GREETING) as vnc:
+            session = install_session(services, vnc.port)
+
             async with AsgiWebSocket(app, f"/api/browser/{session.token}/ws") as websocket:
                 assert websocket.accepted is True
                 assert websocket.subprotocol is None
-        finally:
-            server.close()
-            await server.wait_closed()
+                # Read before leaving, so the stream is proven to work and not merely to have
+                # been accepted — and so the server has certainly seen the connection.
+                assert await websocket.receive_bytes() == self.GREETING
 
     async def test_echoes_the_subprotocol_when_one_is_offered(self, app, services) -> None:
-        server, port = await start_echo_server()
-        session = install_session(services, port)
-        try:
+        async with EchoServer(greeting=self.GREETING) as vnc:
+            session = install_session(services, vnc.port)
+
             async with AsgiWebSocket(
                 app, f"/api/browser/{session.token}/ws", subprotocols=["binary"]
             ) as websocket:
                 assert websocket.subprotocol == "binary"
-        finally:
-            server.close()
-            await server.wait_closed()
+                assert await websocket.receive_bytes() == self.GREETING
 
     async def test_counts_the_viewer_while_it_is_connected(self, app, services) -> None:
         # A tab watching the stream is a session in use, which the idle timeout must respect.
-        server, port = await start_echo_server()
-        session = install_session(services, port)
-        try:
+        async with EchoServer(greeting=self.GREETING) as vnc:
+            session = install_session(services, vnc.port)
+
             async with AsgiWebSocket(app, f"/api/browser/{session.token}/ws") as websocket:
                 await websocket.receive_bytes()
 
                 assert session.viewers == 1
-        finally:
-            server.close()
-            await server.wait_closed()
 
     async def test_refuses_an_unknown_token(self, app, services) -> None:
         # The token is what stands between the internet and a logged-in browser.

@@ -32,12 +32,31 @@ class TestSettings:
                 "default_interval_days": 10,
                 "retention_days": 30,
                 "browser_idle_timeout_minutes": 20,
+                "log_level": "DEBUG",
             },
         )
 
         assert response.status_code == 200
         assert response.json()["apprise_urls"] == "tgram://token/chat"
         assert (await logged_in.get("/api/settings")).json()["warning_lead_days"] == 14
+
+    async def test_changing_the_log_level_takes_effect_at_once(
+        self, logged_in: httpx.AsyncClient
+    ) -> None:
+        # Not at the next restart: the reason to change the level is to watch something happening
+        # now, and restarting to get it discards whatever was interesting.
+        import logging
+
+        await logged_in.put("/api/settings", json={"log_level": "DEBUG"})
+
+        assert logging.getLogger().level == logging.DEBUG
+
+    async def test_refuses_a_log_level_it_does_not_know(
+        self, logged_in: httpx.AsyncClient
+    ) -> None:
+        response = await logged_in.put("/api/settings", json={"log_level": "chatty"})
+
+        assert response.status_code == 422
 
     async def test_rejects_a_nonsensical_value(self, logged_in: httpx.AsyncClient) -> None:
         response = await logged_in.put("/api/settings", json={"error_threshold": 0})

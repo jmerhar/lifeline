@@ -517,6 +517,12 @@ export interface components {
              */
             error_threshold: number;
             /**
+             * Log Level
+             * @default INFO
+             * @enum {string}
+             */
+            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+            /**
              * Notify Cooldown Hours
              * @default 24
              */
@@ -582,6 +588,12 @@ export interface components {
              * @default 3
              */
             error_threshold: number;
+            /**
+             * Log Level
+             * @default INFO
+             * @enum {string}
+             */
+            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
             /**
              * Notify Cooldown Hours
              * @default 24

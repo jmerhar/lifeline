@@ -4,6 +4,7 @@ Every test runs against its own temporary data directory and its own SQLite file
 test can see another's rows and none of them touch a developer's real database.
 """
 
+import asyncio
 import tempfile
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
@@ -175,6 +176,7 @@ def make_settings(**overrides: object) -> Setting:
         "notify_cooldown_hours": 24,
         "warning_lead_days": 7,
         "error_threshold": 3,
+        "log_level": "INFO",
         "default_interval_days": 7,
         "retention_days": 90,
         "browser_idle_timeout_minutes": 15,
@@ -445,3 +447,55 @@ async def logged_in(client, services, admin) -> "httpx.AsyncClient":
         services.settings.session_cookie_name, services.cookies.issue(admin.id)
     )
     return client
+
+
+class EchoServer:
+    """A TCP server standing in for x11vnc, torn down deterministically.
+
+    Every accepted connection is remembered and closed on exit, rather than left for the event
+    loop to drop when the test ends. A transport finalised by the garbage collector instead of
+    being closed raises ResourceWarning, and since this suite treats warnings as errors that
+    surfaced as an unrelated test failing every few runs.
+
+    A connection is recorded when its handler runs, which is not guaranteed to have happened by
+    the time a test that never reads anything finishes — so read at least one byte before leaving
+    the block. That also makes such a test assert something worth asserting.
+    """
+
+    def __init__(self, greeting: bytes = b"", hang_up: bool = False) -> None:
+        self._greeting = greeting
+        self._hang_up = hang_up
+        self._writers: list[asyncio.StreamWriter] = []
+        self._server: asyncio.Server | None = None
+        self.port = 0
+
+    async def __aenter__(self) -> "EchoServer":
+        self._server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
+        self.port = self._server.sockets[0].getsockname()[1]
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        for writer in self._writers:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                # The peer is already gone; there is nothing left to close cleanly.
+                pass
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self._writers.append(writer)
+        if self._hang_up:
+            # Closed here rather than by returning: a handler that just returns leaves the
+            # connection open, so the other end never sees the hang-up being tested.
+            writer.close()
+            return
+        if self._greeting:
+            writer.write(self._greeting)
+            await writer.drain()
+        while data := await reader.read(1024):
+            writer.write(b"echo:" + data)
+            await writer.drain()

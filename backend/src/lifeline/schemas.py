@@ -5,7 +5,7 @@ Separate from the models on purpose: a request body must never be able to set
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -117,6 +117,9 @@ class SettingsWrite(BaseModel):
     notify_cooldown_hours: Annotated[int, Field(default=24, ge=0, le=8760)] = 24
     warning_lead_days: Annotated[int, Field(default=7, ge=0, le=365)] = 7
     error_threshold: Annotated[int, Field(default=3, ge=1, le=100)] = 3
+    # Constrained to the names the logging module knows, so a typo is refused here rather than
+    # silently leaving the level at whatever it was.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     default_interval_days: Annotated[int, Field(default=7, ge=1, le=365)] = 7
     retention_days: Annotated[int, Field(default=90, ge=0, le=3650)] = 90
     browser_idle_timeout_minutes: Annotated[int, Field(default=15, ge=1, le=240)] = 15

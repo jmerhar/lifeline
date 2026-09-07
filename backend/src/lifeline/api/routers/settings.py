@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from ...schemas import Message, SettingsRead, SettingsWrite
+from ...services import logs
 from ...services.notifier import Event
 from ...services.store import load_settings_row
 from ..deps import DbDep, ServicesDep, require_setup_complete, require_user
@@ -27,6 +28,9 @@ async def update(payload: SettingsWrite, db: DbDep) -> SettingsRead:
     for field, value in payload.model_dump().items():
         setattr(row, field, value)
     await db.flush()
+    # Applied at once rather than at the next restart: the reason to change the level is to watch
+    # something that is happening now.
+    logs.apply_level(row.log_level)
     return SettingsRead.model_validate(row)
 
 

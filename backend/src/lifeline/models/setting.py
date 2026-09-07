@@ -1,6 +1,6 @@
 """Instance-wide settings, held in a single row."""
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, Text
+from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, TimestampMixin
@@ -40,6 +40,11 @@ class Setting(Base, TimestampMixin):
     # Consecutive failed checks before the failures are reported as a site problem rather
     # than treated as a transient network blip.
     error_threshold: Mapped[int] = mapped_column(Integer, default=3)
+
+    # How much detail the log carries. A setting rather than only an environment variable,
+    # because the moment DEBUG is wanted is the moment something is failing, and restarting the
+    # container to get it discards whatever was interesting.
+    log_level: Mapped[str] = mapped_column(String(10), default="INFO")
 
     default_interval_days: Mapped[int] = mapped_column(Integer, default=7)
     retention_days: Mapped[int] = mapped_column(Integer, default=90)

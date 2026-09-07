@@ -67,6 +67,7 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     default_interval_days: 7,
     retention_days: 90,
     browser_idle_timeout_minutes: 15,
+    log_level: "INFO",
     ...overrides,
   };
 }

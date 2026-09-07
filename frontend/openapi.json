@@ -298,6 +298,17 @@
             "title": "Error Threshold",
             "type": "integer"
           },
+          "log_level": {
+            "default": "INFO",
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ],
+            "title": "Log Level",
+            "type": "string"
+          },
           "notify_cooldown_hours": {
             "default": 24,
             "maximum": 8760.0,
@@ -376,6 +387,17 @@
             "minimum": 1.0,
             "title": "Error Threshold",
             "type": "integer"
+          },
+          "log_level": {
+            "default": "INFO",
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ],
+            "title": "Log Level",
+            "type": "string"
           },
           "notify_cooldown_hours": {
             "default": 24,

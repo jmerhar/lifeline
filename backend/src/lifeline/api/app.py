@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from ..config import SETUP_TOKEN_DISABLED, Settings, get_settings
+from ..services import logs
 from .deps import build_services
 from .routers import auth, browser, checks, health, settings as settings_router, setup, sites
 
@@ -51,15 +52,17 @@ def _announce(token: str | None) -> None:
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the application."""
     settings = settings or get_settings()
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format="%(asctime)s %(levelname)-7s %(name)s %(message)s",
-    )
+    # The configured level is the bootstrap one: it applies until the settings row can be read,
+    # at which point the stored level takes over.
+    log_file = logs.configure(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         services = build_services(settings)
         app.state.services = services
+        if log_file is not None:
+            logger.info("logging to %s", log_file)
+        await _apply_stored_log_level(services)
         app.state.setup_token = resolve_setup_token(settings)
         _announce(app.state.setup_token)
         # A container that was killed rather than shut down leaves an X server and a browser
@@ -90,6 +93,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _mount_frontend(app, settings)
     return app
+
+
+async def _apply_stored_log_level(services: object) -> None:
+    """Raise or lower the log level to whatever the settings say.
+
+    Best-effort. The configured level already applies, so a database that cannot be read here
+    costs some detail in the log — and that is not a reason to refuse to start. Whatever is wrong
+    with the database will announce itself through the health endpoint and through every request
+    that touches it, which is a far clearer signal than a process that exits at boot.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from ..services.store import load_settings_row
+
+    try:
+        async with services.sessionmaker() as session:  # type: ignore[attr-defined]
+            row = await load_settings_row(session)
+            await session.commit()
+    except SQLAlchemyError:
+        logger.warning("could not read the stored log level; keeping the configured one")
+        return
+    logs.apply_level(row.log_level)
 
 
 def _mount_frontend(app: FastAPI, settings: Settings) -> None:
