@@ -188,6 +188,31 @@ class TestReapKills:
 
         assert await supervisor.reap("/data/profiles", root=data_dir) == 0
 
+    async def test_never_kills_a_process_that_started_this_one(self, data_dir: Path) -> None:
+        # A shell running a script carries the whole script in its argv, and a supervisor's
+        # arguments name what it supervises — so an ancestor's command line very easily contains
+        # the marker. Killing one means the application killing its own parent, which in a
+        # container is PID 1.
+        write_proc_entry(data_dir, os.getpid(), "python -m lifeline")
+        (data_dir / str(os.getpid()) / "status").write_text("Name:\tpython\nPPid:\t1\n")
+        write_proc_entry(data_dir, 1, "sh -c Xvfb :99 -screen 0 && python -m lifeline")
+        (data_dir / "1" / "status").write_text("Name:\tsh\nPPid:\t0\n")
+
+        assert await supervisor.reap("Xvfb :99 ", root=data_dir) == 0
+
+    async def test_reports_this_process_and_its_ancestors(self, data_dir: Path) -> None:
+        write_proc_entry(data_dir, os.getpid(), "python")
+        (data_dir / str(os.getpid()) / "status").write_text("PPid:\t1\n")
+        write_proc_entry(data_dir, 1, "sh")
+        (data_dir / "1" / "status").write_text("PPid:\t0\n")
+
+        assert supervisor.protected_pids(root=data_dir) == {os.getpid(), 1}
+
+    async def test_protects_this_process_where_there_is_no_proc(self, data_dir: Path) -> None:
+        # A developer machine without /proc: the chain cannot be walked, and the one pid that
+        # must never be killed is still known.
+        assert supervisor.protected_pids(root=data_dir / "absent") == {os.getpid()}
+
     async def test_counts_nothing_when_the_process_is_already_gone(
         self, data_dir: Path
     ) -> None:

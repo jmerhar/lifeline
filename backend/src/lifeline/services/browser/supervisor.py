@@ -90,6 +90,34 @@ async def start(name: str, argv: list[str], marker: str, **kwargs: object) -> Ma
     return ManagedProcess(name=name, process=process, marker=marker)
 
 
+def _parent_of(pid: int, root: Path) -> int:
+    """The pid that started ``pid``, or 0 when that cannot be read."""
+    try:
+        for line in (root / str(pid) / "status").read_text().splitlines():
+            if line.startswith("PPid:"):
+                return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return 0
+    return 0
+
+
+def protected_pids(root: Path = _PROC) -> set[int]:
+    """This process and everything that started it.
+
+    Reaping matches on a fragment of a command line, and a command line is not only the
+    process's own: a shell running a script that mentions the marker carries the whole script
+    in its argv, and a supervisor's arguments name what it supervises. Killing one of those
+    means the application killing its own parent — in a container, PID 1 — which is a much
+    worse outcome than failing to clean up a stray.
+    """
+    chain: set[int] = set()
+    pid = os.getpid()
+    while pid > 0 and pid not in chain:
+        chain.add(pid)
+        pid = _parent_of(pid, root)
+    return chain
+
+
 def _signal_group(pid: int, sig: int) -> bool:
     """Signal a whole process group, reporting whether it was still there."""
     try:
@@ -127,11 +155,12 @@ async def reap(*markers: str, root: Path = _PROC) -> int:
     browser holding a profile directory that the next login cannot open.
     """
     killed = 0
+    protected = protected_pids(root)
     for marker in markers:
         if not marker:
             continue
         for pid in find_processes(marker, root=root):
-            if pid == os.getpid():
+            if pid in protected:
                 continue
             logger.warning("reaping leftover process %d matching %r", pid, marker)
             if _signal_group(pid, signal.SIGKILL):

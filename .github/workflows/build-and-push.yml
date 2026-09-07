@@ -38,10 +38,17 @@ jobs:
         env:
           # The runner's own Python, rather than the virtualenv a local run uses.
           PYTHON: python
-          LIFELINE_TEST_DISPLAY: ":99"
+          # Not :99, which is the application's own default. The suite builds the real service
+          # graph at one point, and that reaps stray X servers on the configured display — on a
+          # machine where CI's own display is the one it is configured to reclaim, the suite
+          # kills the display the rest of it needs.
+          LIFELINE_TEST_DISPLAY: ":77"
         # Through the same script as `make test-backend`, so CI and a local run cannot drift.
         run: |
-          Xvfb :99 -screen 0 1280x800x24 &
+          # stderr discarded: Xvfb compiles a keyboard map at startup and warns about every
+          # keysym this xkeyboard-config does not know, which is a screen of noise above the
+          # test output and, as it says itself, not fatal.
+          Xvfb :77 -screen 0 1280x800x24 2>/dev/null &
           trap 'kill %1' EXIT
           bin/test-backend.sh -v --junitxml=junit/backend.xml \
             --cov=lifeline --cov-report=term-missing \

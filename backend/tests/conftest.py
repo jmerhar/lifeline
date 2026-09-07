@@ -50,6 +50,11 @@ def settings(data_dir: Path) -> Settings:
         secret_key="test-secret-key",
         scheduler_enabled=False,
         setup_token="test-setup-token",
+        # Deliberately not the default. The lifespan test builds the real service graph, which
+        # reaps leftover processes by matching "Xvfb :<display_base>" against every command line
+        # on the machine — so with the default it would find and kill the X server the
+        # interactive-login tests are running on.
+        display_base=901,
     )
 
 

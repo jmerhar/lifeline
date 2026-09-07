@@ -41,6 +41,14 @@ class TestOpening:
 
         assert fake_processes.displays_waited == [f":{settings.display_base}"]
 
+    async def test_marks_the_x_server_with_an_unambiguous_marker(
+        self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
+    ) -> None:
+        # ":99" alone is a prefix of ":991", and a marker is matched as a substring.
+        await build(settings, fake_driver, fake_processes).open_login(1, LOGIN_URL, IDLE)
+
+        assert fake_processes.started[0].marker == f"Xvfb :{settings.display_base} "
+
     async def test_binds_the_vnc_server_to_the_loopback_interface(
         self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
     ) -> None:
@@ -230,8 +238,9 @@ class TestClosing:
 
         await manager.reap_orphans()
 
+        # The trailing space matters: without it, :99's marker also matches :991.
         assert fake_processes.reaped == [
-            (str(settings.profiles_dir), f"Xvfb :{settings.display_base}")
+            (str(settings.profiles_dir), f"Xvfb :{settings.display_base} ")
         ]
 
 

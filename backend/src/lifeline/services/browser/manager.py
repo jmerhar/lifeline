@@ -117,7 +117,9 @@ class BrowserManager:
         """
         return await self._processes.reap(
             str(self._settings.profiles_dir),
-            f"Xvfb :{self._settings.display_base}",
+            # The trailing space is the argument boundary: without it, display :99's marker
+            # also matches an X server running on :991.
+            f"Xvfb :{self._settings.display_base} ",
         )
 
     async def open_login(self, site_id: int, url: str, idle_timeout: timedelta) -> LoginSession:
@@ -148,7 +150,7 @@ class BrowserManager:
                             "-nolisten",
                             "tcp",
                         ],
-                        marker=f"Xvfb {display}",
+                        marker=f"Xvfb {display} ",
                     )
                 )
                 await self._processes.wait_for_display(display)
