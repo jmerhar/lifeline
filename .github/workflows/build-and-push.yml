@@ -45,10 +45,13 @@ jobs:
           LIFELINE_TEST_DISPLAY: ":77"
         # Through the same script as `make test-backend`, so CI and a local run cannot drift.
         run: |
-          # stderr discarded: Xvfb compiles a keyboard map at startup and warns about every
-          # keysym this xkeyboard-config does not know, which is a screen of noise above the
-          # test output and, as it says itself, not fatal.
-          Xvfb :77 -screen 0 1280x800x24 2>/dev/null &
+          # Xvfb's output is left in the log on purpose. It opens with a screen of "Could not
+          # resolve keysym XF86…" warnings, which are this xkeyboard-config not knowing some of
+          # the keysyms in the keymap and are harmless — Xvfb says as much itself. Suppressing
+          # them would also suppress whatever it has to say on the day the display genuinely
+          # fails to start, and that failure otherwise surfaces only as a browser launch timing
+          # out for no visible reason.
+          Xvfb :77 -screen 0 1280x800x24 &
           trap 'kill %1' EXIT
           bin/test-backend.sh -v --junitxml=junit/backend.xml \
             --cov=lifeline --cov-report=term-missing \
