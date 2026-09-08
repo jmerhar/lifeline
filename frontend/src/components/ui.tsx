@@ -200,6 +200,41 @@ export function Choice({
   );
 }
 
+export function Switch({
+  checked,
+  onChange,
+  label,
+  busy,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  /** Names what is being switched, since the control carries no visible text of its own. */
+  label: string;
+  busy?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      disabled={busy}
+      onClick={() => onChange(!checked)}
+      className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+        checked ? "bg-accent" : "bg-line"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`h-4 w-4 rounded-full bg-canvas transition-transform ${
+          checked ? "translate-x-4.5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`rounded border border-line bg-surface ${className}`}>{children}</div>
