@@ -16,7 +16,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Button, Card, Empty, Problem, Spinner, Switch } from "../components/ui";
 import { countdown, relativeTime, summarise, timestamp } from "../lib/format";
 import { SessionPanel } from "./SessionPanel";
-import { SiteForm, type Tab } from "./SiteForm";
+import { SiteForm, type Approach, type Tab } from "./SiteForm";
 
 export function Sites() {
   const client = useQueryClient();
@@ -25,6 +25,7 @@ export function Sites() {
 
   const [editing, setEditing] = useState<Site | null | undefined>(undefined);
   const [editingTab, setEditingTab] = useState<Tab>("site");
+  const [editingApproach, setEditingApproach] = useState<Approach | undefined>(undefined);
   const [loggingInto, setLoggingInto] = useState<Site | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -34,9 +35,10 @@ export function Sites() {
 
   const refresh = () => client.invalidateQueries({ queryKey: ["sites"] });
 
-  /** Open the editor on a site, on a given panel. */
-  const edit = (site: Site, tab: Tab = "site") => {
+  /** Open the editor on a site, on a given panel, optionally forcing a detection approach. */
+  const edit = (site: Site, tab: Tab = "site", approach?: Approach) => {
     setEditingTab(tab);
+    setEditingApproach(approach);
     setEditing(site);
   };
 
@@ -151,6 +153,7 @@ export function Sites() {
           site={editing}
           defaultIntervalDays={settings.data?.default_interval_days ?? 7}
           initialTab={editingTab}
+          initialApproach={editingApproach}
           error={saveError}
           busy={save.isPending}
           onCancel={() => {
@@ -172,7 +175,9 @@ export function Sites() {
             // Straight to the panel the login has just made answerable, with the fresh session
             // attached so the comparison is offered rather than explained away.
             const saved = (await api.sites()).find((row) => row.id === site.id);
-            if (saved) edit(saved, "detection");
+            // The comparison is selected because a login has just happened, which is the one
+            // moment it is both possible and the reason someone is here.
+            if (saved) edit(saved, "detection", "detect");
           }}
         />
       ) : null}

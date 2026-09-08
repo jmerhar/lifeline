@@ -30,7 +30,7 @@ import {
 } from "../components/ui";
 
 /** How the detection rules are being arrived at. */
-type Approach = "detect" | "manual" | "none";
+export type Approach = "detect" | "manual" | "none";
 
 /** The panels an existing site's settings are divided into. */
 export type Tab = "site" | "detection" | "advanced";
@@ -45,6 +45,7 @@ export function SiteForm({
   site,
   defaultIntervalDays,
   initialTab = "site",
+  initialApproach,
   onCancel,
   onSave,
   error,
@@ -54,6 +55,8 @@ export function SiteForm({
   defaultIntervalDays: number;
   /** Which panel to open on. The login flow lands on detection, having just made it answerable. */
   initialTab?: Tab;
+  /** Overrides what the site's own settings imply — the login flow asks for the comparison. */
+  initialApproach?: Approach;
   onCancel: () => void;
   onSave: (payload: SiteWrite) => void;
   error?: string | null;
@@ -63,7 +66,9 @@ export function SiteForm({
     site ? toWrite(site) : { ...emptySite, interval_days: defaultIntervalDays },
   );
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [approach, setApproach] = useState<Approach>(() => initialApproach(site));
+  const [approach, setApproach] = useState<Approach>(
+    () => initialApproach ?? approachFor(site),
+  );
   const [found, setFound] = useState<DetectedRules | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
 
@@ -465,13 +470,16 @@ function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text
 /**
  * Which approach an existing site's settings represent.
  *
- * A site with a session but no rules has just had its login captured, so the comparison is both
- * available and the reason someone is looking at this panel — it starts selected. Without a
- * session, no rules means "don't detect", which is what the site currently does.
+ * No rules means "don't detect", because that is what the site does and, having been saved that
+ * way, is what its owner asked for. Guessing "you must have meant to compare" from the presence
+ * of a session silently overrode a deliberate choice every time the form was reopened.
+ *
+ * Arriving straight from a login is the one case where the comparison should start selected, and
+ * that is knowable from the way the panel was opened rather than from the row — so the caller
+ * says so with ``initialApproach``.
  */
-function initialApproach(site: Site | null): Approach {
+function approachFor(site: Site | null): Approach {
   if (site === null) return "none";
   const set = [site.login_url_pattern, site.success_pattern, site.failure_pattern].filter(Boolean);
-  if (set.length > 0) return "manual";
-  return site.session != null ? "detect" : "none";
+  return set.length > 0 ? "manual" : "none";
 }

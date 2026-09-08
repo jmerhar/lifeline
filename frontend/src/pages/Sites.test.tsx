@@ -562,9 +562,9 @@ describe("editing a site", () => {
     expect(form.getByText(/Log in to this site first/)).toBeInTheDocument();
   });
 
-  it("starts on the comparison for a site whose login was just captured", async () => {
-    // No rules but a session means the login has just been taken, which is when the comparison
-    // is both possible and the reason someone is looking at this panel.
+  it("remembers that detecting was deliberately turned off", async () => {
+    // Guessing "you must have meant to compare" from the presence of a session overrode the
+    // choice every time the form was reopened.
     server.use(
       http.get("/api/sites", () =>
         HttpResponse.json([
@@ -576,7 +576,32 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    expect(form.getByRole("radio", { name: /Work it out/ })).toBeChecked();
+    expect(form.getByRole("radio", { name: /Don't detect/ })).toBeChecked();
+  });
+
+  it("starts on the comparison when the login flow has just finished", async () => {
+    // The one moment it is both possible and the reason someone is here — known from the way the
+    // panel was opened, not from the row.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+        ]),
+      ),
+      http.post("/api/sites/1/login-session", () =>
+        HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
+      ),
+      http.post("/api/sites/1/session/import", () => HttpResponse.json({ detail: "imported" })),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("button", { name: "Log in to example" }));
+    await userEvent.click(screen.getByRole("button", { name: "Paste cookies" }));
+    await userEvent.type(screen.getByLabelText("Cookies"), "uid=1");
+    await userEvent.click(screen.getByRole("button", { name: "Save session" }));
+
+    expect(await screen.findByRole("radio", { name: /Work it out/ })).toBeChecked();
   });
 
   it("fills the rules in from a comparison, and says what it found", async () => {
