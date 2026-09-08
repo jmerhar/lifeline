@@ -25,7 +25,7 @@ dev: ## Start the stack with hot reload (API on :8000, interface on :5173)
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 up: ## Build and start the production stack
-	docker compose up --build -d
+	docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
 	@echo "Interface: http://127.0.0.1:8000 — the setup token is in 'make logs'."
 
 down: ## Stop the stack, keeping the data
@@ -38,7 +38,7 @@ shell: ## Open a shell in the running container
 	docker compose exec lifeline sh
 
 build: ## Build the image without starting anything
-	docker compose build
+	docker compose -f docker-compose.yml -f docker-compose.build.yml build
 
 ##@ Testing
 

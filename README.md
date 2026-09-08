@@ -46,10 +46,13 @@ anything. There is a [light theme](docs/screenshot-light.png) too.</sub>
 ## Running it
 
 ```bash
-git clone https://github.com/jmerhar/lifeline.git
-cd lifeline
+mkdir -p lifeline/data && cd lifeline
+curl -O https://raw.githubusercontent.com/jmerhar/lifeline/main/docker-compose.yml
 docker compose up -d
 ```
+
+One file is all it takes; there is nothing to clone or build. `data` is created first because
+Docker would otherwise create it as root, and the container does not run as root.
 
 Then open <http://127.0.0.1:8000>. The first screen asks for a **setup token**, which is
 printed in the container's log:

@@ -1,15 +1,15 @@
 # The stack, as one service.
 #
+# Self-contained on purpose: this file is all anyone needs to run lifeline, so it pulls the
+# published image rather than naming a build context. Building from source is
+# docker-compose.build.yml, which `make up` adds.
+#
 # Everything mutable lives in ./data: the SQLite database, the encryption key generated on
 # first boot, and one browser profile per site. Back that directory up and there is nothing
 # else to keep.
 services:
   lifeline:
     image: ghcr.io/jmerhar/lifeline:latest
-    build:
-      context: .
-      args:
-        NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: lifeline
     restart: unless-stopped
     # A browser is a tree of processes, and PID 1 has to reap the ones it orphans.
