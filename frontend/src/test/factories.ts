@@ -27,6 +27,7 @@ export function makeSite(overrides: Partial<Site> = {}): Site {
     last_ok_at: "2026-09-06T10:00:00Z",
     next_check_at: "2026-09-13T10:00:00Z",
     deadline_at: null,
+    risk: null,
     session: {
       captured_at: "2026-09-01T09:00:00Z",
       captured_via: "browser",

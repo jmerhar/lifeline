@@ -38,9 +38,28 @@ describe("Sites", () => {
 
   it("does not invent a reason for a healthy site", async () => {
     render(<Sites />);
+    await screen.findByText("alive");
 
-    await screen.findByText("example");
+    // Asserted on the cell's structure, not on absent text: an empty reason element renders
+    // nothing a text query can look for, so a query alone would pass however the row is built.
+    const status = document.querySelectorAll("tbody tr td")[1]!;
+    expect(status.children).toHaveLength(1);
     expect(screen.queryByText(/before the next check/)).not.toBeInTheDocument();
+  });
+
+  it("puts the reason beside the status, not somewhere else", async () => {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([makeSite({ status: "at_risk", risk: "the account lapses in 4 day(s)" })]),
+      ),
+    );
+
+    render(<Sites />);
+    await screen.findByText("due soon");
+
+    const status = document.querySelectorAll("tbody tr td")[1]!;
+    expect(status.children).toHaveLength(2);
+    expect(status.textContent).toContain("the account lapses in 4 day(s)");
   });
 
   it("summarises the sites above the table", async () => {
@@ -84,6 +103,8 @@ describe("Sites", () => {
 
     expect(await screen.findByText(/2 cookie\(s\), captured/)).toBeInTheDocument();
     expect(screen.getByText("https://example.org/home")).toBeInTheDocument();
+    // The rendered expiry, not just the field name: the name alone is already guarded by tsc.
+    expect(screen.getByText(/1 Jan 2027/)).toBeInTheDocument();
   });
 
   it("says a site has no session yet", async () => {
