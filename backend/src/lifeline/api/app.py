@@ -13,7 +13,16 @@ from .. import __version__
 from ..config import SETUP_TOKEN_DISABLED, Settings, get_settings
 from ..services import logs
 from .deps import build_services
-from .routers import auth, browser, checks, health, settings as settings_router, setup, sites
+from .routers import (
+    auth,
+    browser,
+    checks,
+    health,
+    login_proxy,
+    settings as settings_router,
+    setup,
+    sites,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=f"{API_PREFIX}/openapi.json",
     )
 
-    for module in (health, setup, auth, sites, checks, settings_router, browser):
+    for module in (health, setup, auth, sites, checks, settings_router, browser, login_proxy):
         app.include_router(module.router, prefix=API_PREFIX)
 
     _mount_frontend(app, settings)
