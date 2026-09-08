@@ -19,6 +19,7 @@ import {
   emptySite,
   toWrite,
   type DetectedRules,
+  type RuleOutcome,
   type RuleTrialResult,
   type Site,
   type SiteWrite,
@@ -466,6 +467,12 @@ function Trial({
 
       {result ? (
         <dl className="flex flex-col gap-1 text-micro">
+          {result.rules?.map((rule) => (
+            <div key={rule.rule} className="flex flex-wrap gap-x-2">
+              <dt className="text-muted">{RULE_LABELS[rule.rule]}</dt>
+              <dd className={rule.helps ? "text-alive" : "text-risk"}>{ruleNote(rule)}</dd>
+            </div>
+          ))}
           <Outcome
             label="Signed in, a check would say"
             outcome={result.live_outcome}
@@ -489,6 +496,28 @@ function Trial({
       ) : null}
     </div>
   );
+}
+
+/** The form's own name for each rule, so the report and the field agree. */
+const RULE_LABELS: Record<RuleOutcome["rule"], string> = {
+  login_url_pattern: "Login page looks like",
+  success_pattern: "Page must contain",
+  failure_pattern: "Page must not contain",
+};
+
+/**
+ * What one rule did, in a sentence.
+ *
+ * Worded per rule because matching means the opposite thing depending on which it is: a success
+ * pattern is supposed to be on the signed-in page, the other two on the signed-out one.
+ */
+function ruleNote(rule: RuleOutcome): string {
+  if (rule.helps) return "works — matches only the page it is meant to";
+  if (!rule.on_live && !rule.on_dead) return "never matched either page, so it does nothing";
+  if (rule.on_live && rule.on_dead) return "matches both pages, so it cannot tell them apart";
+  return rule.rule === "success_pattern"
+    ? "matches the signed-out page instead, so it has this backwards"
+    : "matches the signed-in page instead, so it would report a working session as dead";
 }
 
 function Outcome({

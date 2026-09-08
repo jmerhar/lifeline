@@ -908,3 +908,86 @@ describe("trying the detection rules out", () => {
     expect(await form.findByRole("alert")).toHaveTextContent("could not reach the site");
   });
 });
+
+describe("what each rule did", () => {
+  const trial = (rules: unknown[]) => ({
+    works: true,
+    live_outcome: "ok",
+    live_detail: null,
+    dead_outcome: "pattern_missing",
+    dead_detail: "the page does not contain 'burek'",
+    rules,
+  });
+
+  async function run(rules: unknown[]) {
+    server.use(http.post("/api/sites/1/test-rules", () => HttpResponse.json(trial(rules))));
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+    return form;
+  }
+
+  it("says a rule matched nothing at all", async () => {
+    // Previously indistinguishable from a working rule: the verdict came from a later one, so
+    // this rule's result was computed and thrown away.
+    const form = await run([
+      { rule: "login_url_pattern", on_live: false, on_dead: false, helps: false },
+    ]);
+
+    expect(await form.findByText(/never matched either page/)).toBeInTheDocument();
+  });
+
+  it("names the rule the way the field does", async () => {
+    const form = await run([
+      { rule: "failure_pattern", on_live: false, on_dead: false, helps: false },
+    ]);
+
+    await form.findByText(/never matched either page/);
+    expect(form.getAllByText("Page must not contain").length).toBeGreaterThan(1);
+  });
+
+  it("says a rule matches both pages", async () => {
+    const form = await run([
+      { rule: "success_pattern", on_live: true, on_dead: true, helps: false },
+    ]);
+
+    expect(await form.findByText(/cannot tell them apart/)).toBeInTheDocument();
+  });
+
+  it("says a login pattern that fires on the working page has it backwards", async () => {
+    const form = await run([
+      { rule: "login_url_pattern", on_live: true, on_dead: false, helps: false },
+    ]);
+
+    expect(await form.findByText(/report a working session as dead/)).toBeInTheDocument();
+  });
+
+  it("says a success pattern that fires on the dead page has it backwards", async () => {
+    // The mirror image, and a different mistake: the phrase belongs in the other field.
+    const form = await run([
+      { rule: "success_pattern", on_live: false, on_dead: true, helps: false },
+    ]);
+
+    expect(await form.findByText(/has this backwards/)).toBeInTheDocument();
+  });
+
+  it("confirms a rule that does its job", async () => {
+    const form = await run([
+      { rule: "success_pattern", on_live: true, on_dead: false, helps: true },
+    ]);
+
+    expect(await form.findByText(/matches only the page it is meant to/)).toBeInTheDocument();
+  });
+
+  it("reports every rule, not just the one the verdict came from", async () => {
+    const form = await run([
+      { rule: "login_url_pattern", on_live: false, on_dead: false, helps: false },
+      { rule: "success_pattern", on_live: true, on_dead: false, helps: true },
+      { rule: "failure_pattern", on_live: false, on_dead: false, helps: false },
+    ]);
+
+    await form.findByText(/matches only the page it is meant to/);
+    expect(form.getAllByText(/never matched either page/)).toHaveLength(2);
+  });
+});

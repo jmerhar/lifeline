@@ -23,7 +23,7 @@ from ..config import Settings
 from ..models import PingMethod, Site
 from ..models.enums import CheckOutcome
 from .browser.manager import BrowserManager, BrowserUnavailable
-from .checker import MAX_BODY_CHARS, FetchResult, decide
+from .checker import MAX_BODY_CHARS, FetchResult, decide, matches
 from .cookies import StorageState, empty_state, state_to_jar
 
 # A session with nothing in it, for the signed-out half of the comparison.
@@ -223,6 +223,24 @@ def _distinctive_part(landed: str, expected: str) -> str:
 
 
 @dataclass(frozen=True)
+class RuleOutcome:
+    """What one rule did, on each of the two pages.
+
+    Reported per rule because the verdict cannot say. A check stops at the first rule that
+    fires, so a rule further down the order is evaluated and its result thrown away — leaving no
+    way to tell a rule that did not match from one that was never reached. A rule that matches
+    nothing is dead weight, and looks identical to one that is working.
+    """
+
+    # The field it came from, so the interface can name it the way the form does.
+    rule: str
+    on_live: bool
+    on_dead: bool
+    # Whether it fires where it should and not where it should not.
+    helps: bool
+
+
+@dataclass(frozen=True)
 class Trial:
     """What a set of rules would conclude about a page, live and dead."""
 
@@ -230,6 +248,7 @@ class Trial:
     live_detail: str | None
     dead_outcome: CheckOutcome
     dead_detail: str | None
+    rules: tuple[RuleOutcome, ...] = ()
 
     @property
     def works(self) -> bool:
@@ -255,7 +274,48 @@ def verify(site: Site, signed_in: Probe, signed_out: Probe) -> Trial:
         live_detail=live.detail,
         dead_outcome=(dead := decide(site, _as_result(signed_out))).outcome,
         dead_detail=dead.detail,
+        rules=_each_rule(site, signed_in, signed_out),
     )
+
+
+def _each_rule(site: Site, signed_in: Probe, signed_out: Probe) -> tuple[RuleOutcome, ...]:
+    """What every rule that is set did, independently of the order they are consulted in."""
+    found: list[RuleOutcome] = []
+    # Matched against where the request ended up, not against the page.
+    if site.login_url_pattern:
+        found.append(
+            _outcome(
+                "login_url_pattern",
+                on_live=matches(site.login_url_pattern, signed_in.final_url),
+                on_dead=matches(site.login_url_pattern, signed_out.final_url),
+                wanted_on_dead=True,
+            )
+        )
+    if site.success_pattern:
+        found.append(
+            _outcome(
+                "success_pattern",
+                on_live=matches(site.success_pattern, signed_in.body),
+                on_dead=matches(site.success_pattern, signed_out.body),
+                wanted_on_dead=False,
+            )
+        )
+    if site.failure_pattern:
+        found.append(
+            _outcome(
+                "failure_pattern",
+                on_live=matches(site.failure_pattern, signed_in.body),
+                on_dead=matches(site.failure_pattern, signed_out.body),
+                wanted_on_dead=True,
+            )
+        )
+    return tuple(found)
+
+
+def _outcome(rule: str, *, on_live: bool, on_dead: bool, wanted_on_dead: bool) -> RuleOutcome:
+    """One rule's result, with ``wanted_on_dead`` saying which page it is meant to single out."""
+    helps = (on_dead and not on_live) if wanted_on_dead else (on_live and not on_dead)
+    return RuleOutcome(rule=rule, on_live=on_live, on_dead=on_dead, helps=helps)
 
 
 def _as_result(probe: Probe) -> FetchResult:

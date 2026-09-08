@@ -12,6 +12,7 @@ from ...schemas import (
     DetectedRules,
     LoginSessionRead,
     Message,
+    RuleOutcomeRead,
     RuleTrial,
     RuleTrialResult,
     SessionRead,
@@ -267,6 +268,12 @@ async def test_rules(
     trial = verify(candidate, signed_in, signed_out)
     return RuleTrialResult(
         works=trial.works,
+        rules=[
+            RuleOutcomeRead(
+                rule=rule.rule, on_live=rule.on_live, on_dead=rule.on_dead, helps=rule.helps
+            )
+            for rule in trial.rules
+        ],
         live_outcome=trial.live_outcome,
         live_detail=trial.live_detail,
         dead_outcome=trial.dead_outcome,

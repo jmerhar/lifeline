@@ -31,6 +31,7 @@ export type LoginSession = Schema["LoginSessionRead"];
 export type DetectedRules = Schema["DetectedRules"];
 export type RuleTrial = Schema["RuleTrial"];
 export type RuleTrialResult = Schema["RuleTrialResult"];
+export type RuleOutcome = Schema["RuleOutcomeRead"];
 
 /**
  * A blank site, for the add form.

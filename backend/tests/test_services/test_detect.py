@@ -297,3 +297,73 @@ class TestTryingRulesOut:
 
         assert trial.dead_detail is not None
         assert "Log out" in trial.dead_detail
+
+
+class TestWhatEachRuleDid:
+    """A verdict stops at the first rule that fires, so each is reported on its own too."""
+
+    def rules(self, **overrides: object) -> Site:
+        values: dict[str, object] = {
+            "login_url_pattern": None,
+            "success_pattern": None,
+            "failure_pattern": None,
+            "expected_status": 200,
+            "follow_redirects": True,
+        }
+        values.update(overrides)
+        return make_site(**values)
+
+    def test_names_a_rule_that_matched_nothing(self) -> None:
+        # The case that looked identical to a working rule: the verdict came from a later one, so
+        # nothing said this had never matched at all.
+        site = self.rules(login_url_pattern="login.php", success_pattern="Log out")
+        trial = verify(site, probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        pattern = next(rule for rule in trial.rules if rule.rule == "login_url_pattern")
+        assert pattern.on_live is False
+        assert pattern.on_dead is False
+        assert pattern.helps is False
+
+    def test_reports_a_rule_further_down_the_order_that_does_work(self) -> None:
+        site = self.rules(login_url_pattern="login.php", success_pattern="Log out")
+        trial = verify(site, probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        success = next(rule for rule in trial.rules if rule.rule == "success_pattern")
+        assert success.on_live is True
+        assert success.on_dead is False
+        assert success.helps is True
+
+    def test_flags_a_rule_that_fires_on_the_live_page_too(self) -> None:
+        # A pattern loose enough to match both would report a working session as dead.
+        site = self.rules(login_url_pattern="example.org")
+        trial = verify(
+            site, probe(SIGNED_IN), probe(SIGNED_OUT, url="https://example.org/login.php")
+        )
+
+        assert trial.rules[0].on_live is True
+        assert trial.rules[0].helps is False
+
+    def test_says_nothing_about_a_rule_that_is_not_set(self) -> None:
+        trial = verify(self.rules(success_pattern="Log out"), probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert [rule.rule for rule in trial.rules] == ["success_pattern"]
+
+    def test_judges_a_failure_pattern_by_the_page_it_belongs_to(self) -> None:
+        site = self.rules(failure_pattern="Remember me")
+        trial = verify(site, probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert trial.rules[0].on_dead is True
+        assert trial.rules[0].helps is True
+
+    def test_reports_every_rule_even_when_the_first_decides(self) -> None:
+        # The whole point: the verdict is settled by the login pattern, and the other two are
+        # still accounted for.
+        site = self.rules(
+            login_url_pattern="login.php", success_pattern="Log out", failure_pattern="Remember me"
+        )
+        trial = verify(
+            site, probe(SIGNED_IN), probe(SIGNED_OUT, url="https://example.org/login.php")
+        )
+
+        assert len(trial.rules) == 3
+        assert all(rule.helps for rule in trial.rules)

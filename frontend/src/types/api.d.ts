@@ -543,6 +543,23 @@ export interface components {
          */
         PingMethod: "http" | "browser";
         /**
+         * RuleOutcomeRead
+         * @description What one rule did on each page, independently of the order they are consulted in.
+         */
+        RuleOutcomeRead: {
+            /** Helps */
+            helps: boolean;
+            /** On Dead */
+            on_dead: boolean;
+            /** On Live */
+            on_live: boolean;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "login_url_pattern" | "success_pattern" | "failure_pattern";
+        };
+        /**
          * RuleTrial
          * @description Rules to try, as typed into the form rather than as saved.
          *
@@ -578,6 +595,11 @@ export interface components {
             /** Live Detail */
             live_detail?: string | null;
             live_outcome: components["schemas"]["CheckOutcome"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["RuleOutcomeRead"][];
             /** Works */
             works: boolean;
         };

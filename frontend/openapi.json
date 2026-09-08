@@ -275,6 +275,40 @@
         "title": "PingMethod",
         "type": "string"
       },
+      "RuleOutcomeRead": {
+        "description": "What one rule did on each page, independently of the order they are consulted in.",
+        "properties": {
+          "helps": {
+            "title": "Helps",
+            "type": "boolean"
+          },
+          "on_dead": {
+            "title": "On Dead",
+            "type": "boolean"
+          },
+          "on_live": {
+            "title": "On Live",
+            "type": "boolean"
+          },
+          "rule": {
+            "enum": [
+              "login_url_pattern",
+              "success_pattern",
+              "failure_pattern"
+            ],
+            "title": "Rule",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "on_live",
+          "on_dead",
+          "helps"
+        ],
+        "title": "RuleOutcomeRead",
+        "type": "object"
+      },
       "RuleTrial": {
         "description": "Rules to try, as typed into the form rather than as saved.\n\nSent rather than read from the row so the answer describes what is on screen: testing what is\nstored would answer a question nobody asked, and the point is to find out before saving.",
         "properties": {
@@ -357,6 +391,14 @@
           },
           "live_outcome": {
             "$ref": "#/components/schemas/CheckOutcome"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RuleOutcomeRead"
+            },
+            "title": "Rules",
+            "type": "array"
           },
           "works": {
             "title": "Works",

@@ -210,11 +210,24 @@ class RuleTrial(BaseModel):
     follow_redirects: bool = True
 
 
+class RuleOutcomeRead(BaseModel):
+    """What one rule did on each page, independently of the order they are consulted in."""
+
+    # The field it came from, so the interface can name it the way the form does.
+    rule: Literal["login_url_pattern", "success_pattern", "failure_pattern"]
+    on_live: bool
+    on_dead: bool
+    helps: bool
+
+
 class RuleTrialResult(BaseModel):
     """What those rules would conclude, on a page that works and one that does not."""
 
     # True only when a working session reads as working *and* a dead one reads as dead.
     works: bool
+    # One entry per rule that is set. A verdict stops at the first rule that fires, so without
+    # these there is no telling a rule that matched nothing from one that was never reached.
+    rules: list[RuleOutcomeRead] = []
     live_outcome: CheckOutcome
     live_detail: str | None = None
     dead_outcome: CheckOutcome
