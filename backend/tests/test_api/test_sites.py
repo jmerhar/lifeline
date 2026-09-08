@@ -263,6 +263,8 @@ class TestRiskReason:
         """Put a site two days from its inactivity deadline, with no check due before then."""
         site = await db.get(Site, site_id)
         assert site is not None
+        # Alive, because a reason is only the open question for a site whose session still works.
+        site.status = SiteStatus.ALIVE
         site.last_ok_at = datetime.now(UTC) - timedelta(days=88)
         site.next_check_at = datetime.now(UTC) + timedelta(days=30)
         await db.commit()
@@ -278,6 +280,19 @@ class TestRiskReason:
 
     async def test_stays_quiet_about_a_healthy_site(self, created: dict) -> None:
         assert created["risk"] is None
+
+    async def test_says_nothing_for_a_site_already_reported_lapsed(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        # "The account lapses in 2 days" under a lapsed badge describes a race already lost.
+        await self.run_out_of_time(db, created["id"])
+        site = await db.get(Site, created["id"])
+        site.status = SiteStatus.LAPSED
+        await db.commit()
+
+        body = (await logged_in.get("/api/sites")).json()
+
+        assert body[0]["risk"] is None
 
     async def test_answers_for_one_site_too(
         self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict

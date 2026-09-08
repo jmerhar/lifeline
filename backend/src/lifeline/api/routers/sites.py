@@ -1,11 +1,11 @@
 """Managing sites, their sessions and their history."""
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from datetime import UTC, datetime, timedelta
-
-from ...models import CaptureMethod, Site
+from ...models import CaptureMethod, Setting, Site, SiteStatus
 from ...schemas import (
     CheckRead,
     CookieImport,
@@ -39,6 +39,17 @@ router = APIRouter(
 PULSE_LENGTH = 12
 # The default page of history for one site.
 HISTORY_LENGTH = 50
+
+
+def _risk(site: Site, settings_row: Setting, now: datetime) -> str | None:
+    """Why a site needs attention, for the statuses where that is the open question.
+
+    A lapsed or erroring site has already been reported as such, and telling someone that its
+    account lapses in two days describes a race it has lost. Mirrors what the scheduler considers.
+    """
+    if site.status not in (SiteStatus.ALIVE, SiteStatus.AT_RISK):
+        return None
+    return is_at_risk(site, settings_row, now=now)
 
 
 def to_read(site: Site, pulse: list[str] | None = None, risk: str | None = None) -> SiteRead:
@@ -97,10 +108,7 @@ async def index(db: DbDep) -> list[SiteRead]:
     pulse = await pulse_for_sites(db, PULSE_LENGTH)
     row = await load_settings_row(db)
     now = datetime.now(UTC)
-    return [
-        to_read(site, pulse.get(site.id, []), risk=is_at_risk(site, row, now=now))
-        for site in sites
-    ]
+    return [to_read(site, pulse.get(site.id, []), risk=_risk(site, row, now)) for site in sites]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -127,9 +135,7 @@ async def show(site_id: int, db: DbDep) -> SiteRead:
     site = await load_site(db, site_id)
     pulse = await pulse_for_sites(db, PULSE_LENGTH)
     row = await load_settings_row(db)
-    return to_read(
-        site, pulse.get(site.id, []), risk=is_at_risk(site, row, now=datetime.now(UTC))
-    )
+    return to_read(site, pulse.get(site.id, []), risk=_risk(site, row, datetime.now(UTC)))
 
 
 @router.put("/{site_id}")
