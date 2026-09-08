@@ -141,21 +141,22 @@ class CheckRunner:
         session.add(check)
 
         if report.rotated and report.state is not None and site.session is not None:
-            self._save_state(site, site.session, report.state, now)
+            kept = self._save_state(site, site.session, report.state)
             site.session.rotated_at = now
             # Names only. The values are what the session is, and a log file is not where they go.
             logger.debug(
                 "  %s: stored the reissued session; cookies %s, expiring %s",
                 site.name,
-                ",".join(cookie_names(report.state)),
+                ",".join(cookie_names(kept)),
                 site.session.expires_at,
             )
         return check
 
-    def _save_state(
-        self, site: Site, stored: SiteSession, state: StorageState, now: datetime
-    ) -> None:
-        """Persist a session, scoped to the site it belongs to.
+    def _save_state(self, site: Site, stored: SiteSession, state: StorageState) -> StorageState:
+        """Persist a session, scoped to the site it belongs to, and return what was stored.
+
+        Returned rather than kept to itself because the scoping happens here: a caller that
+        logged the state it passed in would report cookies that were dropped on the way.
 
         A browser used for a login picks up cookies from everything it touched, so this is where
         the ones belonging elsewhere are dropped — on every write rather than only on capture,
@@ -174,6 +175,7 @@ class CheckRunner:
         stored.state = self._cipher.encrypt_json(state)
         stored.expires_at = expires_at(state)
         stored.cookie_names = ",".join(cookie_names(state))
+        return state
 
     def _apply(
         self, site: Site, report: CheckReport, settings_row: Setting, now: datetime
@@ -268,7 +270,7 @@ class CheckRunner:
             stored.captured_via = captured_via
             stored.captured_at = now
             stored.rotated_at = None
-            self._save_state(site, stored, state, now)
+            kept = self._save_state(site, stored, state)
             if user_agent:
                 site.user_agent = user_agent
             site.session = stored
@@ -282,7 +284,7 @@ class CheckRunner:
                 "stored a session for %s captured via %s, with %d cookie(s)",
                 site.name,
                 captured_via,
-                len(cookie_names(state)),
+                len(cookie_names(kept)),
             )
         # Cooldowns from the previous session would silence the message that says whether
         # this login actually worked.
