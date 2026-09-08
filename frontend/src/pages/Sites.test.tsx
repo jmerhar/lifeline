@@ -260,6 +260,11 @@ describe("Sites", () => {
         return HttpResponse.json([makeSite()]);
       }),
       http.post("/api/sites/1/session/import", () => HttpResponse.json({ detail: "imported" })),
+      // The panel asks for a browser as it opens, before this test takes the paste route
+      // instead. Left unhandled it is a real request escaping the test.
+      http.post("/api/sites/1/login-session", () =>
+        HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
+      ),
     );
     render(<Sites />);
     await screen.findByText("example");

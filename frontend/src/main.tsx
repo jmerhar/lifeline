@@ -12,6 +12,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
+import { routerFuture } from "./router";
 
 const client = new QueryClient({
   defaultOptions: {
@@ -28,7 +29,7 @@ const client = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
-      <BrowserRouter>
+      <BrowserRouter future={routerFuture}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>
