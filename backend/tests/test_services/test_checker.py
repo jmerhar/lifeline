@@ -4,7 +4,6 @@ import random
 from datetime import UTC, datetime, timedelta
 
 import httpx
-import pytest
 import respx
 
 from lifeline.config import Settings
@@ -149,7 +148,9 @@ class TestNextCheckTime:
 
     def test_the_retry_delay_grows_with_consecutive_failures(self) -> None:
         first = next_check_time(make_site(consecutive_failures=1), CheckOutcome.HTTP_ERROR, now=NOW)
-        second = next_check_time(make_site(consecutive_failures=2), CheckOutcome.HTTP_ERROR, now=NOW)
+        second = next_check_time(
+            make_site(consecutive_failures=2), CheckOutcome.HTTP_ERROR, now=NOW
+        )
 
         assert second > first
 
@@ -361,12 +362,29 @@ class TestIsAtRisk:
 
         assert is_at_risk(site, make_settings(), now=NOW) is None
 
-    def test_warns_about_a_site_nothing_is_going_to_check(self) -> None:
-        # No next check at all — a disabled site. Its clocks still run out.
+    def test_stays_quiet_when_a_check_is_due_immediately(self) -> None:
+        # No next-check time means due now, not "never" — the check about to run will either reset
+        # the clock or report the session as gone.
         site = make_site(next_check_at=None)
+        site.session = SiteSession(expires_at=NOW + timedelta(days=2), state=b"")
+
+        assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is None
+
+    def test_warns_when_the_next_check_is_itself_overdue(self) -> None:
+        # A next check in the past is not a check that is going to happen: it is one nothing has
+        # run, because the site was paused or the schedule stopped. Its clocks still run out, and
+        # this is exactly when nobody is watching.
+        site = make_site(next_check_at=NOW - timedelta(days=3))
         site.session = SiteSession(expires_at=NOW + timedelta(days=2), state=b"")
 
         reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
 
         assert reason is not None
-        assert "is due" in reason
+        assert "expires in 2 day(s)" in reason
+
+    def test_warns_about_a_deadline_already_passed(self) -> None:
+        # Overdue is the loudest case there is; it must not fall through as "nothing to say".
+        site = make_site(next_check_at=NOW - timedelta(days=3), inactivity_limit_days=90)
+        site.last_ok_at = NOW - timedelta(days=95)
+
+        assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is not None

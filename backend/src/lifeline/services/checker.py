@@ -234,10 +234,14 @@ def is_at_risk(site: Site, settings_row: Setting, *, now: datetime) -> str | Non
     report the session as gone, and a warning now would be noise either way.
 
     That leaves the case worth raising: the clock runs out before anything looks at this site again,
-    which usually means the interval is longer than the site tolerates.
+    which usually means the interval is longer than the site tolerates — or that nothing is going
+    to look at it at all, because it has been paused or the schedule has stopped running.
     """
     lead = timedelta(days=settings_row.warning_lead_days)
     next_check = site.next_check_at
+    if next_check is None:
+        # Due immediately, so a check is about to reset whichever clock is running out.
+        return None
 
     deadline = site.deadline_at
     if _runs_out_first(deadline, next_check, lead=lead, now=now):
@@ -259,20 +263,26 @@ def is_at_risk(site: Site, settings_row: Setting, *, now: datetime) -> str | Non
 
 
 def _runs_out_first(
-    clock: datetime | None, next_check: datetime | None, *, lead: timedelta, now: datetime
+    clock: datetime | None, next_check: datetime, *, lead: timedelta, now: datetime
 ) -> bool:
     """Whether ``clock`` runs out before the next check, and near enough to say so.
 
-    A site with no next check is one nothing is going to look at — a disabled site — so its clocks
-    running out is worth the same warning.
+    Only a check still to come can reset a clock. A next-check time in the past is not a check that
+    is going to happen: it is one nothing has run — a site that has been paused, or a schedule that
+    stopped — and treating it as imminent would silence a site precisely while nothing is looking
+    at it.
     """
     if clock is None:
         return False
-    if next_check is not None and next_check <= clock:
+    if now <= next_check <= clock:
         return False
     return clock - lead <= now
 
 
-def _when(moment: datetime | None) -> str:
-    """A next-check time, for a sentence a person reads."""
-    return "is due" if moment is None else f"on {moment:%-d %b %Y}"
+def _when(moment: datetime) -> str:
+    """A next-check time, for a sentence a person reads.
+
+    Never asked about a site with no next-check time: that means due immediately, and a clock a
+    check is about to reset is not warned about at all.
+    """
+    return f"on {moment:%d %b %Y}".replace(" 0", " ")
