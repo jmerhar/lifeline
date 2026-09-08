@@ -38,7 +38,7 @@ export type Tab = "site" | "detection" | "advanced";
 const TABS: { id: Tab; label: string }[] = [
   { id: "site", label: "The site" },
   { id: "detection", label: "Spotting a dead session" },
-  { id: "advanced", label: "Rarely needed" },
+  { id: "advanced", label: "Advanced" },
 ];
 
 export function SiteForm({

@@ -494,7 +494,7 @@ describe("editing a site", () => {
     await userEvent.clear(form.getByLabelText(/^Name/));
     await userEvent.type(form.getByLabelText(/^Name/), "renamed");
 
-    await userEvent.click(form.getByRole("tab", { name: /Rarely needed/ }));
+    await userEvent.click(form.getByRole("tab", { name: /Advanced/ }));
     await userEvent.click(form.getByRole("tab", { name: /The site/ }));
 
     expect(form.getByLabelText(/^Name/)).toHaveValue("renamed");
