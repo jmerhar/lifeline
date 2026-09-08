@@ -381,3 +381,87 @@ class TestDetectingTheRules:
         response = await logged_in.post(f"/api/sites/{created['id']}/detect")
 
         assert response.status_code == 503
+
+
+class TestTryingRulesOverHttp:
+    """Trying rules from the form against the live site."""
+
+    async def give_it_a_session(self, db: AsyncSession, cipher, site_id: int) -> None:
+        site = await db.get(Site, site_id)
+        site.session = SiteSession(
+            state=cipher.encrypt_json(
+                {
+                    "cookies": [
+                        {"name": "session", "value": "v", "domain": "example.org", "path": "/"}
+                    ],
+                    "origins": [],
+                }
+            ),
+            captured_via=CaptureMethod.IMPORT,
+            captured_at=site.created_at,
+            cookie_names="session",
+        )
+        await db.commit()
+
+    def answer(self, request: httpx.Request) -> httpx.Response:
+        if request.headers.get("cookie"):
+            return httpx.Response(200, text="<a>Log out</a>")
+        return httpx.Response(200, text="<p>Remember me</p>")
+
+    async def test_reports_rules_that_would_notice_a_dead_session(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        body = (
+            await logged_in.post(
+                f"/api/sites/{created['id']}/test-rules",
+                json={"success_pattern": "Log out", "expected_status": 200},
+            )
+        ).json()
+
+        assert body["works"] is True
+        assert body["live_outcome"] == "ok"
+        assert body["dead_outcome"] == "pattern_missing"
+
+    async def test_reports_rules_that_would_not(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        body = (
+            await logged_in.post(
+                f"/api/sites/{created['id']}/test-rules", json={"expected_status": 200}
+            )
+        ).json()
+
+        assert body["works"] is False
+        assert body["dead_outcome"] == "ok"
+
+    async def test_does_not_save_the_rules_it_was_given(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        # Trying something out must not be a way of applying it.
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        await logged_in.post(
+            f"/api/sites/{created['id']}/test-rules", json={"success_pattern": "Log out"}
+        )
+
+        await db.refresh(await db.get(Site, created["id"]))
+        assert (await db.get(Site, created["id"])).success_pattern == "Logged in as"
+
+    async def test_refuses_without_a_working_session_to_compare_against(
+        self, logged_in: httpx.AsyncClient, created: dict
+    ) -> None:
+        response = await logged_in.post(
+            f"/api/sites/{created['id']}/test-rules", json={"success_pattern": "x"}
+        )
+
+        assert response.status_code == 409
+
+    async def test_needs_a_login(self, client: httpx.AsyncClient, admin: User) -> None:
+        assert (await client.post("/api/sites/1/test-rules", json={})).status_code == 401

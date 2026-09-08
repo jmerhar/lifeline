@@ -4,9 +4,9 @@ import httpx
 import pytest
 import respx
 
-from lifeline.models import PingMethod
+from lifeline.models import CheckOutcome, PingMethod, Site
 from lifeline.services.browser.manager import BrowserUnavailable
-from lifeline.services.detect import Detected, Detector, Probe, compare
+from lifeline.services.detect import Detected, Detector, Probe, compare, verify
 from tests.conftest import SAMPLE_STATE, make_site
 
 SIGNED_IN = "<html><body>Welcome back. <a href='/logout'>Log out</a></body></html>"
@@ -224,3 +224,76 @@ class TestABrowserRenderedSite:
         # which is what made the comparison useless for this kind of site.
         with pytest.raises(BrowserUnavailable):
             await Detector(settings).probe(make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE)
+
+
+class TestTryingRulesOut:
+    """Whether a set of rules would notice a dead session, judged by the code that judges checks."""
+
+    def rules(self, **overrides: object) -> Site:
+        values: dict[str, object] = {
+            "login_url_pattern": None,
+            "success_pattern": None,
+            "failure_pattern": None,
+            "expected_status": 200,
+            "follow_redirects": True,
+        }
+        values.update(overrides)
+        return make_site(**values)
+
+    def test_a_success_pattern_that_only_the_live_page_has_works(self) -> None:
+        trial = verify(self.rules(success_pattern="Log out"), probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert trial.works is True
+        assert trial.live_outcome is CheckOutcome.OK
+        assert trial.dead_outcome is CheckOutcome.PATTERN_MISSING
+
+    def test_a_failure_pattern_that_only_the_dead_page_has_works(self) -> None:
+        trial = verify(
+            self.rules(failure_pattern="Remember me"), probe(SIGNED_IN), probe(SIGNED_OUT)
+        )
+
+        assert trial.works is True
+        assert trial.dead_outcome is CheckOutcome.LOGIN_EXPIRED
+
+    def test_rules_that_pass_both_pages_do_not_work(self) -> None:
+        # The dangerous case: a site configured this way never reports a problem, and looks
+        # configured while doing it.
+        trial = verify(self.rules(success_pattern="html"), probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert trial.live_outcome is CheckOutcome.OK
+        assert trial.dead_outcome is CheckOutcome.OK
+        assert trial.works is False
+
+    def test_rules_that_fail_the_live_page_do_not_work(self) -> None:
+        # The other way round: a problem reported constantly, which is at least loud.
+        trial = verify(
+            self.rules(success_pattern="Not on either page"), probe(SIGNED_IN), probe(SIGNED_OUT)
+        )
+
+        assert trial.live_outcome is CheckOutcome.PATTERN_MISSING
+        assert trial.works is False
+
+    def test_no_rules_at_all_do_not_work(self) -> None:
+        trial = verify(self.rules(), probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert trial.live_outcome is CheckOutcome.OK
+        assert trial.dead_outcome is CheckOutcome.OK
+        assert trial.works is False
+
+    def test_a_login_pattern_matching_both_urls_does_not_work(self) -> None:
+        # It would report a live session as dead, which is why the pattern is tried against the
+        # signed-in page too rather than only against the one it is meant to catch.
+        trial = verify(
+            self.rules(login_url_pattern="example.org"),
+            probe(SIGNED_IN),
+            probe(SIGNED_OUT, url="https://example.org/login.php"),
+        )
+
+        assert trial.live_outcome is CheckOutcome.LOGIN_EXPIRED
+        assert trial.works is False
+
+    def test_explains_each_verdict(self) -> None:
+        trial = verify(self.rules(success_pattern="Log out"), probe(SIGNED_IN), probe(SIGNED_OUT))
+
+        assert trial.dead_detail is not None
+        assert "Log out" in trial.dead_detail

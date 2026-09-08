@@ -399,6 +399,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sites/{site_id}/test-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Rules
+         * @description Try a set of rules against the site as it is now, signed in and signed out.
+         *
+         *     Answers the question someone actually has — would this notice a dead session? — by running
+         *     the same verdict the scheduler runs, on both pages, with the rules currently on screen.
+         */
+        post: operations["test_rules_api_sites__site_id__test_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -519,6 +542,45 @@ export interface components {
          * @enum {string}
          */
         PingMethod: "http" | "browser";
+        /**
+         * RuleTrial
+         * @description Rules to try, as typed into the form rather than as saved.
+         *
+         *     Sent rather than read from the row so the answer describes what is on screen: testing what is
+         *     stored would answer a question nobody asked, and the point is to find out before saving.
+         */
+        RuleTrial: {
+            /**
+             * Expected Status
+             * @default 200
+             */
+            expected_status: number;
+            /** Failure Pattern */
+            failure_pattern?: string | null;
+            /**
+             * Follow Redirects
+             * @default true
+             */
+            follow_redirects: boolean;
+            /** Login Url Pattern */
+            login_url_pattern?: string | null;
+            /** Success Pattern */
+            success_pattern?: string | null;
+        };
+        /**
+         * RuleTrialResult
+         * @description What those rules would conclude, on a page that works and one that does not.
+         */
+        RuleTrialResult: {
+            /** Dead Detail */
+            dead_detail?: string | null;
+            dead_outcome: components["schemas"]["CheckOutcome"];
+            /** Live Detail */
+            live_detail?: string | null;
+            live_outcome: components["schemas"]["CheckOutcome"];
+            /** Works */
+            works: boolean;
+        };
         /**
          * SessionRead
          * @description What is known about a stored session, without any of its secrets.
@@ -1506,6 +1568,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_rules_api_sites__site_id__test_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleTrial"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleTrialResult"];
                 };
             };
             /** @description Validation Error */

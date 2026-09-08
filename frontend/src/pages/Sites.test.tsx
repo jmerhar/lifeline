@@ -789,3 +789,122 @@ describe("pausing a site from the list", () => {
     );
   });
 });
+
+describe("trying the detection rules out", () => {
+  const worked = {
+    works: true,
+    live_outcome: "ok",
+    live_detail: null,
+    dead_outcome: "pattern_missing",
+    dead_detail: "the page does not contain 'Log out'",
+  };
+
+  it("says the rules would notice a dead session", async () => {
+    server.use(http.post("/api/sites/1/test-rules", () => HttpResponse.json(worked)));
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    expect(await form.findByText(/would notice a dead session/)).toBeInTheDocument();
+    expect(form.getByText(/does not contain 'Log out'/)).toBeInTheDocument();
+  });
+
+  it("says when the rules pass both pages", async () => {
+    server.use(
+      http.post("/api/sites/1/test-rules", () =>
+        HttpResponse.json({ ...worked, works: false, dead_outcome: "ok" }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    expect(await form.findByText(/would never be noticed/)).toBeInTheDocument();
+  });
+
+  it("distinguishes rules that fail even while the session works", async () => {
+    // The opposite failure, and a different thing to do about it.
+    server.use(
+      http.post("/api/sites/1/test-rules", () =>
+        HttpResponse.json({
+          ...worked,
+          works: false,
+          live_outcome: "pattern_missing",
+          dead_outcome: "pattern_missing",
+        }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    expect(await form.findByText(/every check would fail/)).toBeInTheDocument();
+  });
+
+  it("sends what is on screen rather than what is saved", async () => {
+    // The point is finding out before saving, so an edited field has to be what gets tried.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post("/api/sites/1/test-rules", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(worked);
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+    await userEvent.type(form.getByLabelText(/Page must contain/), "Sign out");
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.success_pattern).toBe("Sign out");
+  });
+
+  it("cannot try anything with no rules to try", async () => {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+        ]),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+    await userEvent.click(form.getByRole("radio", { name: /Set them myself/ }));
+
+    expect(form.getByRole("button", { name: "Try these rules" })).toBeDisabled();
+  });
+
+  it("offers nothing to try when detecting is turned off", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
+
+    expect(form.queryByRole("button", { name: "Try these rules" })).not.toBeInTheDocument();
+  });
+
+  it("reports a site it could not reach", async () => {
+    server.use(
+      http.post("/api/sites/1/test-rules", () =>
+        HttpResponse.json({ detail: "could not reach the site" }, { status: 502 }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    expect(await form.findByRole("alert")).toHaveTextContent("could not reach the site");
+  });
+});

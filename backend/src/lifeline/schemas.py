@@ -196,6 +196,31 @@ class DetectedRules(BaseModel):
     notes: list[str] = []
 
 
+class RuleTrial(BaseModel):
+    """Rules to try, as typed into the form rather than as saved.
+
+    Sent rather than read from the row so the answer describes what is on screen: testing what is
+    stored would answer a question nobody asked, and the point is to find out before saving.
+    """
+
+    login_url_pattern: str | None = None
+    success_pattern: str | None = None
+    failure_pattern: str | None = None
+    expected_status: int = Field(default=200, ge=100, le=599)
+    follow_redirects: bool = True
+
+
+class RuleTrialResult(BaseModel):
+    """What those rules would conclude, on a page that works and one that does not."""
+
+    # True only when a working session reads as working *and* a dead one reads as dead.
+    works: bool
+    live_outcome: CheckOutcome
+    live_detail: str | None = None
+    dead_outcome: CheckOutcome
+    dead_detail: str | None = None
+
+
 class Message(BaseModel):
     """A plain result for actions that have nothing else to say."""
 

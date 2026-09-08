@@ -21,8 +21,9 @@ import httpx
 
 from ..config import Settings
 from ..models import PingMethod, Site
+from ..models.enums import CheckOutcome
 from .browser.manager import BrowserManager, BrowserUnavailable
-from .checker import MAX_BODY_CHARS
+from .checker import MAX_BODY_CHARS, FetchResult, decide
 from .cookies import StorageState, empty_state, state_to_jar
 
 # A session with nothing in it, for the signed-out half of the comparison.
@@ -219,3 +220,54 @@ def _distinctive_part(landed: str, expected: str) -> str:
     if path and path not in expected:
         return path
     return landed
+
+
+@dataclass(frozen=True)
+class Trial:
+    """What a set of rules would conclude about a page, live and dead."""
+
+    live_outcome: CheckOutcome
+    live_detail: str | None
+    dead_outcome: CheckOutcome
+    dead_detail: str | None
+
+    @property
+    def works(self) -> bool:
+        """Whether these rules would call a working session working and a dead one dead.
+
+        Both halves matter and neither is enough alone. Rules that pass the live page but also
+        pass the dead one describe a site that never reports a problem; rules that catch the dead
+        page but fail the live one report a problem constantly. The second is at least loud.
+        """
+        return self.live_outcome.is_success and not self.dead_outcome.is_success
+
+
+def verify(site: Site, signed_in: Probe, signed_out: Probe) -> Trial:
+    """Judge both pages by ``site``'s rules, using the code that judges a real check.
+
+    Not a search for each string in each page, which would answer a narrower question than the
+    one being asked. The rules interact — a login-page pattern is consulted before the status
+    code, and a missing success pattern is only reached if the status matched — so the only
+    honest test is the verdict itself, twice.
+    """
+    return Trial(
+        live_outcome=(live := decide(site, _as_result(signed_in))).outcome,
+        live_detail=live.detail,
+        dead_outcome=(dead := decide(site, _as_result(signed_out))).outcome,
+        dead_detail=dead.detail,
+    )
+
+
+def _as_result(probe: Probe) -> FetchResult:
+    """A probe in the shape a verdict is passed.
+
+    The session fields are what a check would have merged back into storage, and no verdict reads
+    them, so an empty one stands in rather than inventing a jar this never touched.
+    """
+    return FetchResult(
+        status_code=probe.status_code,
+        final_url=probe.final_url,
+        body=probe.body,
+        state=EMPTY_STATE,
+        rotated=False,
+    )

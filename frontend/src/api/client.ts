@@ -11,6 +11,8 @@ import type {
   Check,
   DetectedRules,
   LoginSession,
+  RuleTrial,
+  RuleTrialResult,
   Settings,
   Site,
   SiteWrite,
@@ -101,6 +103,8 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 export const api = {
   detectRules: (id: number) =>
     request<DetectedRules>(`/sites/${id}/detect`, { method: "POST" }),
+  testRules: (id: number, rules: RuleTrial) =>
+    request<RuleTrialResult>(`/sites/${id}/test-rules`, { method: "POST", ...json(rules) }),
   setupState: () => request<SetupState>("/setup"),
   completeSetup: (payload: { username: string; password: string; token?: string }) =>
     request<User>("/setup", { method: "POST", ...json(payload) }),

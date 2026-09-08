@@ -12,6 +12,8 @@ from ...schemas import (
     DetectedRules,
     LoginSessionRead,
     Message,
+    RuleTrial,
+    RuleTrialResult,
     SessionRead,
     SiteRead,
     SiteWrite,
@@ -21,6 +23,7 @@ from ...services.browser.driver import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from ...services.browser.manager import BrowserUnavailable
 from ...services.checker import is_at_risk
 from ...services.cookies import CookieParseError, parse_import
+from ...services.detect import verify
 from ...services.store import (
     get_site,
     list_sites,
@@ -218,6 +221,56 @@ async def detect(site_id: int, db: DbDep, services: ServicesDep) -> DetectedRule
         success_pattern=found.success_pattern,
         failure_pattern=found.failure_pattern,
         notes=found.notes,
+    )
+
+
+@router.post("/{site_id}/test-rules")
+async def test_rules(
+    site_id: int, payload: RuleTrial, db: DbDep, services: ServicesDep
+) -> RuleTrialResult:
+    """Try a set of rules against the site as it is now, signed in and signed out.
+
+    Answers the question someone actually has — would this notice a dead session? — by running
+    the same verdict the scheduler runs, on both pages, with the rules currently on screen.
+    """
+    site = await load_site(db, site_id)
+    if site.session is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="log in to this site first — there is no working session to test against",
+        )
+    state = services.cipher.decrypt_json(site.session.state)
+    # Applied to a detached copy: the rules being tried are not the site's until someone saves
+    # them, and writing them here would save them by the back door.
+    candidate = Site(
+        ping_url=site.ping_url,
+        user_agent=site.user_agent,
+        ping_method=site.ping_method,
+        login_url_pattern=payload.login_url_pattern,
+        success_pattern=payload.success_pattern,
+        failure_pattern=payload.failure_pattern,
+        expected_status=payload.expected_status,
+        follow_redirects=payload.follow_redirects,
+    )
+    try:
+        signed_in = await services.detector.probe(candidate, state)
+        signed_out = await services.detector.probe(candidate, None)
+    except BrowserUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"could not reach the site: {exc}",
+        ) from exc
+    trial = verify(candidate, signed_in, signed_out)
+    return RuleTrialResult(
+        works=trial.works,
+        live_outcome=trial.live_outcome,
+        live_detail=trial.live_detail,
+        dead_outcome=trial.dead_outcome,
+        dead_detail=trial.dead_detail,
     )
 
 

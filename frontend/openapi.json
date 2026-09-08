@@ -275,6 +275,102 @@
         "title": "PingMethod",
         "type": "string"
       },
+      "RuleTrial": {
+        "description": "Rules to try, as typed into the form rather than as saved.\n\nSent rather than read from the row so the answer describes what is on screen: testing what is\nstored would answer a question nobody asked, and the point is to find out before saving.",
+        "properties": {
+          "expected_status": {
+            "default": 200,
+            "maximum": 599.0,
+            "minimum": 100.0,
+            "title": "Expected Status",
+            "type": "integer"
+          },
+          "failure_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Pattern"
+          },
+          "follow_redirects": {
+            "default": true,
+            "title": "Follow Redirects",
+            "type": "boolean"
+          },
+          "login_url_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url Pattern"
+          },
+          "success_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pattern"
+          }
+        },
+        "title": "RuleTrial",
+        "type": "object"
+      },
+      "RuleTrialResult": {
+        "description": "What those rules would conclude, on a page that works and one that does not.",
+        "properties": {
+          "dead_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dead Detail"
+          },
+          "dead_outcome": {
+            "$ref": "#/components/schemas/CheckOutcome"
+          },
+          "live_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Detail"
+          },
+          "live_outcome": {
+            "$ref": "#/components/schemas/CheckOutcome"
+          },
+          "works": {
+            "title": "Works",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "works",
+          "live_outcome",
+          "dead_outcome"
+        ],
+        "title": "RuleTrialResult",
+        "type": "object"
+      },
       "SessionRead": {
         "description": "What is known about a stored session, without any of its secrets.",
         "properties": {
@@ -1905,6 +2001,59 @@
           }
         },
         "summary": "Import Session",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/test-rules": {
+      "post": {
+        "description": "Try a set of rules against the site as it is now, signed in and signed out.\n\nAnswers the question someone actually has \u2014 would this notice a dead session? \u2014 by running\nthe same verdict the scheduler runs, on both pages, with the rules currently on screen.",
+        "operationId": "test_rules_api_sites__site_id__test_rules_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleTrial"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleTrialResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Rules",
         "tags": [
           "sites"
         ]

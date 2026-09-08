@@ -15,7 +15,14 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import { emptySite, toWrite, type DetectedRules, type Site, type SiteWrite } from "../api/types";
+import {
+  emptySite,
+  toWrite,
+  type DetectedRules,
+  type RuleTrialResult,
+  type Site,
+  type SiteWrite,
+} from "../api/types";
 import { Modal } from "../components/Modal";
 import {
   Button,
@@ -71,6 +78,7 @@ export function SiteForm({
   );
   const [found, setFound] = useState<DetectedRules | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
+  const [trialError, setTrialError] = useState<string | null>(null);
 
   const set = <K extends keyof SiteWrite>(key: K, value: SiteWrite[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -78,6 +86,20 @@ export function SiteForm({
   // Empty text inputs are sent as null rather than "": the API treats an absent pattern as
   // "do not check this", and an empty string would be a pattern that matches everything.
   const text = (value: string) => (value.trim() === "" ? null : value);
+
+  const tryOut = useMutation({
+    mutationFn: () =>
+      api.testRules(site!.id, {
+        login_url_pattern: draft.login_url_pattern,
+        success_pattern: draft.success_pattern,
+        failure_pattern: draft.failure_pattern,
+        expected_status: draft.expected_status,
+        follow_redirects: draft.follow_redirects,
+      }),
+    onError: (cause) =>
+      setTrialError(cause instanceof ApiError ? cause.message : "The rules could not be tried."),
+    onMutate: () => setTrialError(null),
+  });
 
   const detect = useMutation({
     mutationFn: () => api.detectRules(site!.id),
@@ -171,6 +193,10 @@ export function SiteForm({
                 onDetect={() => detect.mutate()}
                 detectError={detectError}
                 ruleCount={ruleCount}
+                trial={tryOut.data ?? null}
+                trialError={trialError}
+                trying={tryOut.isPending}
+                onTry={() => tryOut.mutate()}
               />
             ) : null}
             {tab === "advanced" ? <Advanced draft={draft} set={set} text={text} /> : null}
@@ -292,6 +318,10 @@ function Detection({
   onDetect,
   detectError,
   ruleCount,
+  trial,
+  trialError,
+  trying,
+  onTry,
 }: {
   draft: SiteWrite;
   set: Setter;
@@ -304,6 +334,10 @@ function Detection({
   onDetect: () => void;
   detectError: string | null;
   ruleCount: number;
+  trial: RuleTrialResult | null;
+  trialError: string | null;
+  trying: boolean;
+  onTry: () => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -362,6 +396,17 @@ function Detection({
             Nothing is set yet, so a check could not tell a dead session from a live one.
           </p>
         ) : null}
+
+        {approach !== "none" ? (
+          <Trial
+            hasSession={hasSession}
+            ruleCount={ruleCount}
+            busy={trying}
+            result={trial}
+            error={trialError}
+            onRun={onTry}
+          />
+        ) : null}
       </fieldset>
 
       <fieldset className="flex flex-col gap-4 border-t border-line pt-4">
@@ -387,6 +432,90 @@ function Detection({
       </fieldset>
     </div>
   );
+}
+
+function Trial({
+  hasSession,
+  ruleCount,
+  busy,
+  result,
+  error,
+  onRun,
+}: {
+  hasSession: boolean;
+  ruleCount: number;
+  busy: boolean;
+  result: RuleTrialResult | null;
+  error: string | null;
+  onRun: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" onClick={onRun} disabled={busy || !hasSession || ruleCount === 0}>
+          {busy ? "Trying…" : "Try these rules"}
+        </Button>
+        <span className="text-micro text-muted">
+          {hasSession
+            ? "Fetches the page signed in and signed out, and judges both the way a check would."
+            : "There is no working session to try these against yet."}
+        </span>
+      </div>
+
+      {error ? <Problem>{error}</Problem> : null}
+
+      {result ? (
+        <dl className="flex flex-col gap-1 text-micro">
+          <Outcome
+            label="Signed in, a check would say"
+            outcome={result.live_outcome}
+            detail={result.live_detail}
+            good={result.live_outcome === "ok"}
+          />
+          <Outcome
+            label="Signed out, a check would say"
+            outcome={result.dead_outcome}
+            detail={result.dead_detail}
+            good={result.dead_outcome !== "ok"}
+          />
+          <p className={`mt-1 text-small ${result.works ? "text-alive" : "text-risk"}`}>
+            {result.works
+              ? "These rules would notice a dead session."
+              : result.live_outcome !== "ok"
+                ? "These rules report a problem even while the session works, so every check would fail."
+                : "These rules pass both pages, so a dead session would never be noticed."}
+          </p>
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+function Outcome({
+  label,
+  outcome,
+  detail,
+  good,
+}: {
+  label: string;
+  outcome: string;
+  detail?: string | null;
+  good: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-x-2">
+      <dt className="text-muted">{label}</dt>
+      <dd className={good ? "text-alive" : "text-risk"}>
+        {statusWord(outcome)}
+        {detail ? <span className="text-muted"> — {detail}</span> : null}
+      </dd>
+    </div>
+  );
+}
+
+/** A check outcome as the interface words it elsewhere. */
+function statusWord(outcome: string): string {
+  return outcome.replaceAll("_", " ");
 }
 
 function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text }) {
