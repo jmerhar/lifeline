@@ -206,7 +206,7 @@ def install_session(services, rfb_port: int):
         rfb_port=rfb_port,
         browser=FakeBrowser(),
         processes=[],
-        profile_dir=services.settings.profiles_dir / "1",
+        profile_dir=services.settings.profiles_dir / "login-browser",
         idle_timeout=timedelta(minutes=15),
         expires_at=now + timedelta(minutes=15),
         hard_deadline=now + timedelta(hours=4),
@@ -278,3 +278,25 @@ class TestStream:
             message = await asyncio.wait_for(websocket._from_app.get(), timeout=5)
             assert message["type"] == "websocket.close"
             assert message["code"] == 1011
+
+
+class TestStartingSignedOut:
+    """Whether the login browser begins with an empty cookie jar."""
+
+    async def test_empties_the_jar_for_a_site_with_no_session(
+        self, logged_in: httpx.AsyncClient, fake_driver, site: Site
+    ) -> None:
+        # Landing already signed in as another account is how the wrong session gets captured
+        # without anyone noticing — a second account on a site already logged in here.
+        await logged_in.post(f"/api/sites/{site.id}/login-session")
+
+        assert fake_driver.signed_out == [True]
+
+    async def test_keeps_the_jar_for_a_site_being_logged_in_again(
+        self, logged_in: httpx.AsyncClient, fake_driver, logged_in_site: Site
+    ) -> None:
+        # Already being signed in saves the trip, and there is no other account to confuse it
+        # with: this site's session is the one stored.
+        await logged_in.post(f"/api/sites/{logged_in_site.id}/login-session")
+
+        assert fake_driver.signed_out == [False]

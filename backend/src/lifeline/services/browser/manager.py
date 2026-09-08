@@ -105,9 +105,19 @@ class BrowserManager:
         """The open session, if there is one."""
         return self._active
 
-    def profile_dir(self, site_id: int) -> Path:
-        """Where a site's browser profile lives."""
-        return self._settings.profiles_dir / str(site_id)
+    @property
+    def profile_dir(self) -> Path:
+        """Where the login browser keeps its profile.
+
+        One profile for every site rather than one each. A browser extension lives in the
+        profile, so a profile per site meant a password manager had to be installed, permitted,
+        signed into and two-factored again for every site added — which costs more than typing
+        the password it was there to avoid, and sends a new-device warning each time.
+
+        Nothing depends on the separation: a captured session is stored in the database, and a
+        browser-mode ping builds a throwaway context from that rather than from this profile.
+        """
+        return self._settings.profiles_dir / "login-browser"
 
     async def reap_orphans(self) -> int:
         """Kill anything left over from a previous run.
@@ -122,11 +132,19 @@ class BrowserManager:
             f"Xvfb :{self._settings.display_base} ",
         )
 
-    async def open_login(self, site_id: int, url: str, idle_timeout: timedelta) -> LoginSession:
+    async def open_login(
+        self, site_id: int, url: str, idle_timeout: timedelta, *, signed_out: bool = False
+    ) -> LoginSession:
         """Start a browser for ``site_id`` and stream its screen.
 
         Opening a session closes any other: the alternative is refusing, which would leave
         someone stuck behind a panel they had already finished with.
+
+        ``signed_out`` empties the shared profile's cookie jar first. Asked for when the site has
+        no session yet, where landing on a page already signed in as somebody else is both
+        confusing and a way to capture the wrong account without noticing — a second account on
+        a site already logged into in this browser being the case that matters. The extension's
+        own state is not kept in cookies, so it survives.
         """
         if not self._settings.browser_enabled:
             raise BrowserUnavailable("browser sessions are disabled in this deployment")
@@ -134,7 +152,7 @@ class BrowserManager:
         async with self._lock:
             await self._close_locked()
             display = f":{self._settings.display_base}"
-            profile_dir = self.profile_dir(site_id)
+            profile_dir = self.profile_dir
             rfb_port = _free_port()
             processes: list[supervisor.ManagedProcess] = []
             try:
@@ -177,7 +195,11 @@ class BrowserManager:
                     )
                 )
                 browser = await self._driver.open_interactive(
-                    profile_dir, display, url, self._settings.browser_extension_dir
+                    profile_dir,
+                    display,
+                    url,
+                    self._settings.browser_extension_dir,
+                    signed_out=signed_out,
                 )
             except BaseException:
                 # A half-started session must not be left holding a display or a port.

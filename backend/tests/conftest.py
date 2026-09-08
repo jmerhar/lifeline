@@ -329,13 +329,22 @@ class FakeDriver:
         self.fetched: list[str] = []
         self.browser = FakeBrowser()
         self.fail = fail
+        # Whether each open was asked to start with an empty cookie jar.
+        self.signed_out: list[bool] = []
 
     async def open_interactive(
-        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
+        self,
+        profile_dir: Path,
+        display: str,
+        url: str,
+        extension_dir: Path | None = None,
+        *,
+        signed_out: bool = False,
     ) -> FakeBrowser:
         if self.fail:
             raise RuntimeError("the browser would not start")
         self.opened.append((profile_dir, display, url, extension_dir))
+        self.signed_out.append(signed_out)
         return self.browser
 
     async def fetch(

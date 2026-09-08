@@ -134,18 +134,18 @@ class TestDelete:
         db.expunge_all()
         assert (await db.execute(select(Site))).scalars().all() == []
 
-    async def test_removes_the_browser_profile_too(
+    async def test_leaves_the_login_browsers_profile_alone(
         self, logged_in: httpx.AsyncClient, created: dict, services
     ) -> None:
-        # The profile holds cookies; leaving it behind would keep the session on disk after
-        # the site was apparently deleted.
-        profile = services.browser.profile_dir(created["id"])
+        # One profile is shared by every site, so deleting it would take the password manager's
+        # setup with it. The next first login for any site empties the cookie jar instead.
+        profile = services.browser.profile_dir
         profile.mkdir(parents=True, exist_ok=True)
-        (profile / "Cookies").write_text("secrets")
+        (profile / "Extension State").write_text("the password manager's setup")
 
         await logged_in.delete(f"/api/sites/{created['id']}")
 
-        assert not profile.exists()
+        assert (profile / "Extension State").exists()
 
     async def test_reports_a_missing_site(self, logged_in: httpx.AsyncClient) -> None:
         assert (await logged_in.delete("/api/sites/404")).status_code == 404

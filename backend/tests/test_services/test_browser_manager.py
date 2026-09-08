@@ -70,14 +70,16 @@ class TestOpening:
         assert first.token != second.token
         assert len(first.token) > 20
 
-    async def test_uses_a_profile_directory_per_site(
+    async def test_uses_one_profile_for_every_site(
         self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
     ) -> None:
         manager = build(settings, fake_driver, fake_processes)
 
         await manager.open_login(7, LOGIN_URL, IDLE)
 
-        assert fake_driver.opened[0][0] == settings.profiles_dir / "7"
+        # One profile, not one per site: an extension lives in the profile, and a profile per
+        # site meant setting a password manager up again for every site added.
+        assert fake_driver.opened[0][0] == settings.profiles_dir / "login-browser"
 
     async def test_opening_a_second_session_closes_the_first(
         self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
@@ -206,7 +208,7 @@ class TestClosing:
 
         await manager.close()
 
-        assert (str(settings.profiles_dir / "3"),) in fake_processes.reaped
+        assert (str(settings.profiles_dir / "login-browser"),) in fake_processes.reaped
 
     async def test_finishes_the_teardown_even_if_the_browser_will_not_close(
         self, settings: Settings, fake_processes: FakeProcesses

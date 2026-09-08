@@ -157,13 +157,10 @@ async def update(site_id: int, payload: SiteWrite, db: DbDep, services: Services
 
 
 @router.delete("/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def destroy(site_id: int, db: DbDep, services: ServicesDep) -> None:
+async def destroy(site_id: int, db: DbDep) -> None:
     """Remove a site, its stored session and its history."""
     site = await load_site(db, site_id)
     await db.delete(site)
-    # The browser profile is not in the database, so deleting the row would otherwise leave
-    # the cookies on disk after the site was apparently removed.
-    _remove_profile(services, site_id)
 
 
 @router.get("/{site_id}/checks")
@@ -246,6 +243,10 @@ async def open_login(site_id: int, db: DbDep, services: ServicesDep) -> LoginSes
             site_id,
             site.effective_login_url,
             timedelta(minutes=row.browser_idle_timeout_minutes),
+            # A site with nothing stored is being logged into for the first time, so the browser
+            # starts with an empty cookie jar: landing already signed in as another account is
+            # how the wrong session gets captured without anyone noticing.
+            signed_out=site.session is None,
         )
     except BrowserUnavailable as exc:
         raise HTTPException(
@@ -261,12 +262,15 @@ async def open_login(site_id: int, db: DbDep, services: ServicesDep) -> LoginSes
 
 
 @router.delete("/{site_id}/session")
-async def forget_session(site_id: int, db: DbDep, services: ServicesDep) -> Message:
+async def forget_session(site_id: int, db: DbDep) -> Message:
     """Discard a site's stored session."""
     site = await load_site(db, site_id)
     if site.session is not None:
         await db.delete(site.session)
-    _remove_profile(services, site_id)
+    # Nothing to do about the login browser: it shares one profile between every site, so
+    # wiping it would take the extension setup with it. Discarding the stored session is what
+    # makes the next login for this site open with an empty cookie jar, which reaches the same
+    # place — the site is asked for as somebody signed out.
     return Message(detail="session discarded")
 
 
@@ -287,8 +291,4 @@ async def _fetch_icon(services: ServicesDep, url: str) -> str | None:
         return await favicon.fetch(url, client=client)
 
 
-def _remove_profile(services: ServicesDep, site_id: int) -> None:
-    """Delete a site's browser profile from disk."""
-    import shutil
 
-    shutil.rmtree(services.browser.profile_dir(site_id), ignore_errors=True)

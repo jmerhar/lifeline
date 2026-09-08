@@ -70,7 +70,13 @@ class Driver(Protocol):
     """Opens browsers, headful for a login and headless for a ping."""
 
     async def open_interactive(
-        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
+        self,
+        profile_dir: Path,
+        display: str,
+        url: str,
+        extension_dir: Path | None = None,
+        *,
+        signed_out: bool = False,
     ) -> InteractiveBrowser: ...
 
     async def fetch(
@@ -141,7 +147,13 @@ class PlaywrightDriver:
     """Drives Chromium through Playwright."""
 
     async def open_interactive(
-        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
+        self,
+        profile_dir: Path,
+        display: str,
+        url: str,
+        extension_dir: Path | None = None,
+        *,
+        signed_out: bool = False,
     ) -> InteractiveBrowser:
         """Open a headful browser on ``display``, at ``url``.
 
@@ -168,6 +180,11 @@ class PlaywrightDriver:
         except BaseException:
             await playwright.stop()
             raise
+
+        if signed_out:
+            # Before navigating, so the site is asked for as somebody with no session. The
+            # extension keeps its own state outside the cookie jar and is unaffected.
+            await context.clear_cookies()
 
         page = context.pages[0] if context.pages else await context.new_page()
         try:
