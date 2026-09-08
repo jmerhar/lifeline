@@ -367,3 +367,38 @@ class TestWhatEachRuleDid:
 
         assert len(trial.rules) == 3
         assert all(rule.helps for rule in trial.rules)
+
+
+class TestBothSpellingsOfTheVerb:
+    """A page inviting you to "please login here" is missed by a list that knows only "log in"."""
+
+    # The shape of a real logged-out landing page: it does not redirect, and its only invitation
+    # to sign in spells the verb as one word.
+    ONE_WORD = """
+    <html><head><title>Somewhere</title></head><body>
+    <b>Welcome Back!</b> Please login <a href="login.php">here!</a>
+    <span>This is a mirage.</span>
+    </body></html>
+    """
+
+    def test_finds_the_one_word_spelling(self) -> None:
+        found = compare(probe(SIGNED_IN), probe(self.ONE_WORD))
+
+        assert found.failure_pattern == "Please login"
+
+    def test_does_not_match_the_bare_word_on_a_logged_in_page(self) -> None:
+        # "login" alone is too loose to use: it is in the link and script names of pages that are
+        # perfectly logged in, and a rule matching both pages tells them apart from nothing.
+        logged_in = "<html><a href='login.php'>x</a> Log out</html>"
+
+        found = compare(probe(logged_in), probe(self.ONE_WORD))
+
+        assert found.failure_pattern == "Please login"
+        assert found.success_pattern == "Log out"
+
+    def test_a_welcome_back_on_the_logged_out_page_is_not_taken_as_a_signal(self) -> None:
+        # This page greets a visitor with "Welcome Back!" while signed out. Anything read as
+        # meaning "signed in" would be exactly backwards here.
+        found = compare(probe(SIGNED_IN), probe(self.ONE_WORD))
+
+        assert found.success_pattern == "Log out"

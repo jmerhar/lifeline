@@ -45,11 +45,19 @@ SIGNED_IN_MARKERS = (
 
 # The mirror image: text a login page shows and a signed-in page does not. "Remember me" is the
 # strongest of these, since it belongs to a login form and nothing else.
+#
+# Both spellings of the verb, because a page inviting you to "please login here" is missed
+# entirely by a list that only knows "log in" — and one-word "login" on its own is too loose to
+# use, appearing in the link and script names of pages that are perfectly logged in.
 SIGNED_OUT_MARKERS = (
     "Remember me",
     "Forgot your password",
     "Forgot password",
     "Enter your password",
+    "Please login",
+    "Please log in",
+    "login here",
+    "log in here",
     "Log in",
     "Sign in",
 )
