@@ -33,8 +33,10 @@ class SiteSession(Base, TimestampMixin):
     captured_at: Mapped[datetime] = mapped_column(UtcDateTime)
     # When a ping last brought back a fresh cookie for this session.
     rotated_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
-    # The soonest any stored cookie stops being valid, so the UI can warn before it does.
-    earliest_expiry: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
+    # When the last of the stored cookies expires — the point after which nothing held here can
+    # work. The soonest would be some analytics cookie with a fifteen-minute life, which says
+    # nothing about the session.
+    expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     # Cookie names only, for display. Never the values.
     cookie_names: Mapped[str] = mapped_column(Text, default="")
 

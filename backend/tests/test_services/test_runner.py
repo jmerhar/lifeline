@@ -28,7 +28,19 @@ ROTATED_STATE = {
             "httpOnly": True,
             "secure": True,
             "sameSite": "Lax",
-        }
+        },
+        # A login page leaves its analytics cookies behind; this one expires in 2027 and says
+        # nothing about the session, so it must not be what the stored expiry reports.
+        {
+            "name": "_dd_s",
+            "value": "sampled",
+            "domain": ".example.org",
+            "path": "/",
+            "expires": 1800000000.0,
+            "httpOnly": False,
+            "secure": True,
+            "sameSite": "Lax",
+        },
     ],
     "origins": [],
 }
@@ -121,7 +133,7 @@ class TestRotation:
         site = await reload(db, logged_in_site)
         assert cipher.decrypt_json(site.session.state) == ROTATED_STATE
         assert site.session.rotated_at == NOW
-        assert site.session.cookie_names == "session"
+        assert site.session.cookie_names == "_dd_s,session"
 
     async def test_an_unrotated_session_is_left_alone(
         self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
@@ -134,15 +146,17 @@ class TestRotation:
         assert site.session.state == original
         assert site.session.rotated_at is None
 
-    async def test_records_the_earliest_cookie_expiry(
+    async def test_records_when_the_last_cookie_expires(
         self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
     ) -> None:
+        # The last, not the first: a login page leaves analytics cookies behind that expire in
+        # minutes and say nothing about the session.
         runner = make_runner(make_fetch_result(state=ROTATED_STATE, rotated=True))
 
         await runner.run(logged_in_site.id, now=NOW)
 
         site = await reload(db, logged_in_site)
-        assert site.session.earliest_expiry == datetime(2100, 1, 1, tzinfo=UTC)
+        assert site.session.expires_at == datetime(2100, 1, 1, tzinfo=UTC)
 
 
 class TestLapsedSession:

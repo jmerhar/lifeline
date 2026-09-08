@@ -269,55 +269,104 @@ class TestPerformCheck:
 
 
 class TestIsAtRisk:
+    """A clock running out only matters if no check will reset it first."""
+
     def test_says_nothing_when_no_deadline_is_known(self) -> None:
         assert is_at_risk(make_site(), make_settings(), now=NOW) is None
 
-    def test_warns_before_an_inactivity_deadline(self) -> None:
-        site = make_site(inactivity_limit_days=90, last_ok_at=NOW - timedelta(days=85))
+    def test_warns_when_the_deadline_falls_before_the_next_check(self) -> None:
+        # The case worth raising: the interval is longer than the site tolerates, so nothing will
+        # touch this site before its own clock runs out.
+        site = make_site(
+            inactivity_limit_days=90,
+            last_ok_at=NOW - timedelta(days=85),
+            next_check_at=NOW + timedelta(days=7),
+        )
 
         reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
 
         assert reason is not None
         assert "5 day(s)" in reason
+        assert "before the next check" in reason
+
+    def test_stays_quiet_when_a_check_comes_first(self) -> None:
+        # A successful check is activity, so it moves the deadline. Warning about a deadline we are
+        # going to reset before it arrives is noise.
+        site = make_site(
+            inactivity_limit_days=90,
+            last_ok_at=NOW - timedelta(days=85),
+            next_check_at=NOW + timedelta(days=1),
+        )
+
+        assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is None
 
     def test_stays_quiet_while_the_deadline_is_far_off(self) -> None:
-        site = make_site(inactivity_limit_days=90, last_ok_at=NOW - timedelta(days=10))
+        site = make_site(
+            inactivity_limit_days=90,
+            last_ok_at=NOW - timedelta(days=10),
+            next_check_at=NOW + timedelta(days=365),
+        )
 
         assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is None
 
     def test_measures_the_deadline_from_the_last_success(self) -> None:
-        # A failing check must not look like activity, or the tool hides the very situation
-        # it exists to catch.
+        # A failing check must not look like activity, or the tool hides the very situation it
+        # exists to catch.
         site = make_site(
             inactivity_limit_days=30,
             last_ok_at=NOW - timedelta(days=28),
             last_check_at=NOW,
+            next_check_at=NOW + timedelta(days=7),
         )
 
         assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is not None
 
     def test_reports_zero_days_rather_than_a_negative_countdown(self) -> None:
-        site = make_site(inactivity_limit_days=30, last_ok_at=NOW - timedelta(days=45))
+        site = make_site(
+            inactivity_limit_days=30,
+            last_ok_at=NOW - timedelta(days=45),
+            next_check_at=NOW + timedelta(days=7),
+        )
 
         assert "0 day(s)" in is_at_risk(site, make_settings(), now=NOW)
 
-    def test_warns_before_a_cookie_expires(self) -> None:
-        site = make_site()
-        site.session = SiteSession(earliest_expiry=NOW + timedelta(days=3), state=b"")
+    def test_warns_when_everything_stored_expires_before_the_next_check(self) -> None:
+        site = make_site(next_check_at=NOW + timedelta(days=30))
+        site.session = SiteSession(expires_at=NOW + timedelta(days=3), state=b"")
 
         reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
 
         assert reason is not None
-        assert "cookie expires in 3 day(s)" in reason
+        assert "expires in 3 day(s)" in reason
 
-    def test_stays_quiet_for_a_cookie_that_expires_later(self) -> None:
-        site = make_site()
-        site.session = SiteSession(earliest_expiry=NOW + timedelta(days=60), state=b"")
+    def test_stays_quiet_when_a_check_will_reissue_it_first(self) -> None:
+        # This is what a fifteen-minute analytics cookie used to trigger, on a site whose session
+        # was fine and being reissued on every ping.
+        site = make_site(next_check_at=NOW + timedelta(hours=1))
+        site.session = SiteSession(expires_at=NOW + timedelta(days=3), state=b"")
+
+        assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is None
+
+    def test_stays_quiet_for_an_expiry_further_off_than_the_warning(self) -> None:
+        site = make_site(next_check_at=NOW + timedelta(days=365))
+        site.session = SiteSession(expires_at=NOW + timedelta(days=60), state=b"")
 
         assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is None
 
     def test_ignores_a_session_with_no_recorded_expiry(self) -> None:
-        site = make_site()
-        site.session = SiteSession(earliest_expiry=None, state=b"")
+        # The usual case for a pure session cookie: it lasts until the site says otherwise, and no
+        # date here could predict that.
+        site = make_site(next_check_at=NOW + timedelta(days=30))
+        site.session = SiteSession(expires_at=None, state=b"")
 
         assert is_at_risk(site, make_settings(), now=NOW) is None
+
+    def test_warns_about_a_site_nothing_is_going_to_check(self) -> None:
+        # No next check at all — a disabled site. Its clocks still run out.
+        site = make_site(next_check_at=None)
+        site.session = SiteSession(expires_at=NOW + timedelta(days=2), state=b"")
+
+        reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
+
+        assert reason is not None
+        assert "is due" in reason

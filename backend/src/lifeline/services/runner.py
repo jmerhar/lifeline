@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -25,7 +26,7 @@ from .checker import (
     next_check_time,
     perform_check,
 )
-from .cookies import StorageState, cookie_names, earliest_expiry
+from .cookies import StorageState, cookie_names, expires_at, for_host, foreign_domains
 from .crypto import Cipher, DecryptionError
 from .notifier import Event, Notifier
 from .store import due_sites, get_site, load_settings_row
@@ -143,17 +144,17 @@ class CheckRunner:
             self._save_state(site.session, report.state, now)
             # Names only. The values are what the session is, and a log file is not where they go.
             logger.debug(
-                "  %s: stored the reissued session; cookies %s, earliest expiry %s",
+                "  %s: stored the reissued session; cookies %s, expiring %s",
                 site.name,
                 ",".join(cookie_names(report.state)),
-                site.session.earliest_expiry,
+                site.session.expires_at,
             )
         return check
 
     def _save_state(self, stored: SiteSession, state: StorageState, now: datetime) -> None:
         stored.state = self._cipher.encrypt_json(state)
         stored.rotated_at = now
-        stored.earliest_expiry = earliest_expiry(state)
+        stored.expires_at = expires_at(state)
         stored.cookie_names = ",".join(cookie_names(state))
 
     def _apply(
@@ -245,6 +246,20 @@ class CheckRunner:
             site = await get_site(session, site_id)
             if site is None:
                 raise LookupError(f"no site with id {site_id}")
+            # A browser used for a login picks up cookies from everything it touched; only the ones
+            # belonging to this site are kept. They are the only ones a ping would ever send, and
+            # holding somebody else's session encrypted in this database is not something to do by
+            # accident.
+            host = urlsplit(site.ping_url).hostname or ""
+            dropped = foreign_domains(state, host)
+            if dropped:
+                logger.info(
+                    "%s: not storing cookies for %s — they belong to another site",
+                    site.name,
+                    ", ".join(dropped),
+                )
+            state = for_host(state, host)
+
             stored = site.session or SiteSession(site_id=site_id, captured_at=now, state=b"")
             stored.captured_via = captured_via
             stored.captured_at = now

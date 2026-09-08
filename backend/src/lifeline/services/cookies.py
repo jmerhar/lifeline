@@ -333,8 +333,18 @@ def merge_jar_into_state(state: StorageState, jar: httpx.Cookies) -> tuple[Stora
     return {"cookies": merged, "origins": state["origins"]}, changed
 
 
-def earliest_expiry(state: StorageState) -> datetime | None:
-    """When the first stored cookie stops being valid, if any of them say."""
+def expires_at(state: StorageState) -> datetime | None:
+    """When the last stored cookie stops being valid, if any of them say.
+
+    The *last*, not the first. A login page leaves behind whatever its analytics and consent
+    tooling set, and those expire in minutes — one of them being fifteen minutes old says nothing
+    about whether the session still works. What can be said with confidence is that once every
+    cookie has expired, nothing held here can possibly work any more, and that is the point worth
+    knowing about.
+
+    None when nothing carries an expiry, which is the usual case for a pure session cookie: it
+    lasts until the site decides otherwise, and no date here can predict that.
+    """
     expiries = [
         cookie["expires"]
         for cookie in state["cookies"]
@@ -342,7 +352,47 @@ def earliest_expiry(state: StorageState) -> datetime | None:
     ]
     if not expiries:
         return None
-    return datetime.fromtimestamp(min(expiries), tz=UTC)
+    return datetime.fromtimestamp(max(expiries), tz=UTC)
+
+
+def for_host(state: StorageState, host: str) -> StorageState:
+    """Keep only the cookies that belong to ``host`` or a domain it sits under.
+
+    A browser used for a login collects cookies from everything it touched, which is how a session
+    captured for one site came to hold another site's login cookies entirely. They are never sent
+    anywhere — a request only carries cookies matching its own host — so dropping them costs
+    nothing, and keeping somebody's unrelated session encrypted in this database is not something
+    to do by accident.
+    """
+    if not host:
+        return state
+    kept = [cookie for cookie in state["cookies"] if _belongs_to(cookie.get("domain", ""), host)]
+    origins = [
+        origin
+        for origin in state["origins"]
+        if _belongs_to(urlsplit(origin["origin"]).hostname or "", host)
+    ]
+    return {"cookies": kept, "origins": origins}
+
+
+def _belongs_to(domain: str, host: str) -> bool:
+    """Whether a cookie domain covers ``host``, or is a name under it."""
+    domain = domain.lstrip(".").lower()
+    host = host.lstrip(".").lower()
+    if not domain:
+        return False
+    return domain == host or host.endswith(f".{domain}") or domain.endswith(f".{host}")
+
+
+def foreign_domains(state: StorageState, host: str) -> list[str]:
+    """The cookie domains in ``state`` that do not belong to ``host``, for logging."""
+    return sorted(
+        {
+            cookie.get("domain", "")
+            for cookie in state["cookies"]
+            if not _belongs_to(cookie.get("domain", ""), host)
+        }
+    )
 
 
 def cookie_names(state: StorageState) -> list[str]:

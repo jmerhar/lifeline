@@ -11,8 +11,10 @@ from lifeline.services.cookies import (
     CookieParseError,
     cookie_names,
     default_domain_for,
-    earliest_expiry,
     empty_state,
+    expires_at,
+    for_host,
+    foreign_domains,
     merge_jar_into_state,
     normalise_state,
     parse_import,
@@ -320,32 +322,6 @@ class TestMerge:
         assert merged["cookies"][0]["httpOnly"] is True
 
 
-class TestExpiry:
-    def test_reports_the_soonest_expiry(self) -> None:
-        state = empty_state()
-        state["cookies"] = [
-            state_with(name="a", expires=FUTURE)["cookies"][0],
-            state_with(name="b", expires=FUTURE - 86400)["cookies"][0],
-        ]
-
-        assert earliest_expiry(state) == datetime.fromtimestamp(FUTURE - 86400, tz=UTC)
-
-    def test_ignores_session_cookies(self) -> None:
-        state = empty_state()
-        state["cookies"] = [
-            state_with(name="a", expires=SESSION_COOKIE_EXPIRY)["cookies"][0],
-            state_with(name="b", expires=FUTURE)["cookies"][0],
-        ]
-
-        assert earliest_expiry(state) == datetime.fromtimestamp(FUTURE, tz=UTC)
-
-    def test_reports_nothing_when_no_cookie_has_an_expiry(self) -> None:
-        assert earliest_expiry(state_with(expires=SESSION_COOKIE_EXPIRY)) is None
-
-    def test_reports_nothing_for_an_empty_state(self) -> None:
-        assert earliest_expiry(empty_state()) is None
-
-
 class TestEdgeCases:
     def test_rejects_a_document_that_is_not_a_storage_state(self) -> None:
         # normalise_state also takes what a browser hands back, which is not always what the
@@ -365,3 +341,75 @@ class TestEdgeCases:
     def test_rejects_a_header_of_only_separators(self) -> None:
         with pytest.raises(CookieParseError, match="no cookies found"):
             parse_import(";;;", "https://example.org/")
+
+
+class TestScopingToTheSite:
+    """A browser used for a login collects cookies from everything it touched."""
+
+    def build(self) -> dict:
+        return {
+            "cookies": [
+                {"name": "session", "value": "s", "domain": "example.org", "path": "/",
+                 "expires": FUTURE},
+                {"name": "_dd_s", "value": "a", "domain": ".example.org", "path": "/",
+                 "expires": 1757347245.0},
+                {"name": "_gh_sess", "value": "g", "domain": "github.com", "path": "/",
+                 "expires": FUTURE},
+            ],
+            "origins": [
+                {"origin": "https://example.org", "localStorage": [{"name": "k", "value": "v"}]},
+                {"origin": "https://github.com", "localStorage": [{"name": "gh", "value": "x"}]},
+            ],
+        }
+
+    def test_keeps_the_sites_own_cookies(self) -> None:
+        kept = for_host(self.build(), "example.org")
+
+        assert cookie_names(kept) == ["_dd_s", "session"]
+
+    def test_drops_another_sites_cookies(self) -> None:
+        # This is not hypothetical: a captured session held somebody's GitHub login cookies, which a
+        # ping would never send and which have no business being kept.
+        assert "_gh_sess" not in cookie_names(for_host(self.build(), "example.org"))
+
+    def test_drops_another_sites_local_storage(self) -> None:
+        kept = for_host(self.build(), "example.org")
+
+        assert [origin["origin"] for origin in kept["origins"]] == ["https://example.org"]
+
+    def test_names_what_it_would_drop(self) -> None:
+        assert foreign_domains(self.build(), "example.org") == ["github.com"]
+
+    def test_keeps_a_parent_domain_cookie(self) -> None:
+        # A cookie on .example.org belongs to www.example.org.
+        state = {"cookies": [{"name": "s", "value": "v", "domain": ".example.org", "path": "/"}],
+                 "origins": []}
+
+        assert cookie_names(for_host(state, "www.example.org")) == ["s"]
+
+    def test_keeps_a_subdomain_cookie(self) -> None:
+        # A login that set something on auth.example.org while the site is example.org.
+        state = {"cookies": [{"name": "s", "value": "v", "domain": "auth.example.org", "path": "/"}],
+                 "origins": []}
+
+        assert cookie_names(for_host(state, "example.org")) == ["s"]
+
+    def test_keeps_everything_when_the_host_is_unknown(self) -> None:
+        # Better to store more than to throw away the session over a URL that would not parse.
+        assert len(for_host(self.build(), "")["cookies"]) == 3
+
+
+class TestExpiresAt:
+    def test_reports_the_last_expiry_not_the_first(self) -> None:
+        # The first is a fifteen-minute analytics cookie; it says nothing about the session. The last
+        # is the point after which nothing stored here can work.
+        state = empty_state()
+        state["cookies"] = [
+            {"name": "_dd_s", "value": "a", "domain": "x.org", "path": "/", "expires": 1757347245.0},
+            {"name": "session", "value": "s", "domain": "x.org", "path": "/", "expires": FUTURE},
+        ]
+
+        assert expires_at(state) == datetime.fromtimestamp(FUTURE, tz=UTC)
+
+    def test_reports_nothing_when_no_cookie_carries_an_expiry(self) -> None:
+        assert expires_at(state_with(expires=SESSION_COOKIE_EXPIRY)) is None

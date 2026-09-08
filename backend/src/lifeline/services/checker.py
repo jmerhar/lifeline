@@ -225,21 +225,54 @@ async def perform_check(site: Site, state: StorageState | None, fetcher: Fetcher
 
 
 def is_at_risk(site: Site, settings_row: Setting, *, now: datetime) -> str | None:
-    """Why this site needs attention soon, or None if it does not.
+    """Why this site needs attention before anything else touches it, or None if it does not.
 
-    Two separate clocks can run out: the site's own inactivity deadline, and the expiry of
-    the stored cookies. Either one arriving inside the warning window is worth saying out
-    loud while there is still time to act.
+    Two clocks can run out — the site's own inactivity deadline, and the expiry of everything held
+    for it — and in both cases a check normally resets them: a successful ping is activity, and it
+    brings back a reissued cookie. So the question is not "is a deadline near" but **"will it pass
+    before the next check"**. If a check comes first, that check will either move the deadline or
+    report the session as gone, and a warning now would be noise either way.
+
+    That leaves the case worth raising: the clock runs out before anything looks at this site again,
+    which usually means the interval is longer than the site tolerates.
     """
     lead = timedelta(days=settings_row.warning_lead_days)
+    next_check = site.next_check_at
+
     deadline = site.deadline_at
-    if deadline is not None and deadline - lead <= now:
+    if _runs_out_first(deadline, next_check, lead=lead, now=now):
         days = max((deadline - now).days, 0)
-        return f"the account lapses in {days} day(s) without a successful login"
+        return (
+            f"the account lapses in {days} day(s), before the next check "
+            f"{_when(next_check)} — shorten the interval or log in"
+        )
 
     session = site.session
-    if session is not None and session.earliest_expiry is not None:
-        if session.earliest_expiry - lead <= now:
-            days = max((session.earliest_expiry - now).days, 0)
-            return f"a stored cookie expires in {days} day(s)"
+    expiry = session.expires_at if session is not None else None
+    if _runs_out_first(expiry, next_check, lead=lead, now=now):
+        days = max((expiry - now).days, 0)
+        return (
+            f"everything stored for this site expires in {days} day(s), before the next check "
+            f"{_when(next_check)}"
+        )
     return None
+
+
+def _runs_out_first(
+    clock: datetime | None, next_check: datetime | None, *, lead: timedelta, now: datetime
+) -> bool:
+    """Whether ``clock`` runs out before the next check, and near enough to say so.
+
+    A site with no next check is one nothing is going to look at — a disabled site — so its clocks
+    running out is worth the same warning.
+    """
+    if clock is None:
+        return False
+    if next_check is not None and next_check <= clock:
+        return False
+    return clock - lead <= now
+
+
+def _when(moment: datetime | None) -> str:
+    """A next-check time, for a sentence a person reads."""
+    return "is due" if moment is None else f"on {moment:%-d %b %Y}"

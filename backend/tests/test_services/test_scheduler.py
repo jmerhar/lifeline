@@ -78,7 +78,9 @@ class TestRiskRefresh:
         site.status = SiteStatus.ALIVE
         site.inactivity_limit_days = 90
         site.last_ok_at = NOW - timedelta(days=86)
-        site.next_check_at = NOW + timedelta(days=3)
+        # After the deadline, so no check will reset it in time — which is the only case worth a
+        # warning.
+        site.next_check_at = NOW + timedelta(days=30)
         row = await load_settings_row(db)
         row.apprise_urls = "tgram://token/chat"
         await db.commit()
