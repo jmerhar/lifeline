@@ -373,14 +373,34 @@ describe("the site form's examples", () => {
     }
   });
 
-  it("keeps a browser from autofilling a password into a pattern field", async () => {
+  it("names no password in any example", async () => {
+    // A placeholder mentioning one gets the field classified as a credential, which makes a
+    // password manager fill it in and then offer to save a login for the whole form.
     render(<Sites />);
     await screen.findByText("example");
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
     await fillTheSite(form, "anything", "https://example.org/home");
 
-    expect(form.getByLabelText(/Page must not contain/)).toHaveAttribute("autocomplete", "off");
+    for (const field of form.getAllByRole("textbox")) {
+      expect(field.getAttribute("placeholder") ?? "").not.toMatch(/password/i);
+    }
+  });
+
+  it("tells every password manager to leave the pattern fields alone", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "anything", "https://example.org/home");
+
+    const field = form.getByLabelText(/Page must not contain/);
+    expect(field).toHaveAttribute("autocomplete", "off");
+    // One attribute per vendor, none of which the others honour.
+    expect(field).toHaveAttribute("data-bwignore");
+    expect(field).toHaveAttribute("data-1p-ignore");
+    expect(field).toHaveAttribute("data-lpignore", "true");
+    expect(field).toHaveAttribute("data-form-type", "other");
   });
 });
 

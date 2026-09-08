@@ -24,6 +24,7 @@ import {
   Choice,
   Field,
   Input,
+  notACredential,
   Problem,
   Select,
   TextArea,
@@ -206,6 +207,7 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
             onChange={(event) => set("name", event.target.value)}
             required
             autoFocus
+            {...notACredential}
           />
         </Field>
         <Field label="Ping URL" hint="A page that only renders when you are logged in.">
@@ -214,7 +216,7 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
             value={draft.ping_url}
             onChange={(event) => set("ping_url", event.target.value)}
             placeholder="e.g. https://example.org/home"
-            autoComplete="off"
+            {...notACredential}
             required
           />
         </Field>
@@ -227,7 +229,7 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
             value={draft.login_url ?? ""}
             onChange={(event) => set("login_url", text(event.target.value))}
             placeholder="e.g. https://example.org/login"
-            autoComplete="off"
+            {...notACredential}
           />
         </Field>
         <Field label="Check every" hint="Days between checks.">
@@ -413,6 +415,7 @@ function Detection({
             <Input
               value={draft.user_agent ?? ""}
               onChange={(event) => set("user_agent", text(event.target.value))}
+              {...notACredential}
             />
           </Field>
           <div className="sm:col-span-2">
@@ -441,7 +444,7 @@ function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text
           value={draft.login_url_pattern ?? ""}
           onChange={(event) => set("login_url_pattern", text(event.target.value))}
           placeholder="e.g. login.php"
-          autoComplete="off"
+          {...notACredential}
         />
       </Field>
       <Field label="Page must contain" hint="Something only a logged-in page shows.">
@@ -449,17 +452,18 @@ function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text
           value={draft.success_pattern ?? ""}
           onChange={(event) => set("success_pattern", text(event.target.value))}
           placeholder="e.g. Log out"
-          autoComplete="off"
+          {...notACredential}
         />
       </Field>
       <Field label="Page must not contain" hint="Something only a logged-out page shows.">
         <Input
           value={draft.failure_pattern ?? ""}
           onChange={(event) => set("failure_pattern", text(event.target.value))}
-          // An example, not an instruction: unprefixed, this field reads as asking the person to
-          // type their password into it — and a browser may offer to fill it in.
-          placeholder="e.g. Enter your password"
-          autoComplete="off"
+          // Names no password: a placeholder mentioning one gets the field classified as a
+          // credential, which makes a password manager both fill it in and offer to save a login
+          // for the whole form. "Remember me" belongs to a login page just as reliably.
+          placeholder="e.g. Remember me"
+          {...notACredential}
         />
       </Field>
     </div>
