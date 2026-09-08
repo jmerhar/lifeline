@@ -33,6 +33,27 @@ def resolve_setup_token(settings: Settings) -> str | None:
     return settings.setup_token or secrets.token_urlsafe(9)
 
 
+async def setup_is_pending(services: object) -> bool:
+    """Whether this instance still has no administrator.
+
+    Read once at startup to decide whether a setup token is needed at all. An unreadable
+    database is treated as pending: minting a token the wizard will reject costs nothing,
+    whereas skipping it would leave the wizard unguarded if the database turns out to be
+    empty.
+    """
+    from sqlalchemy import func, select
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from ..models import User
+
+    try:
+        async with services.sessionmaker() as session:  # type: ignore[attr-defined]
+            count = (await session.execute(select(func.count()).select_from(User))).scalar_one()
+    except SQLAlchemyError:
+        return True
+    return count == 0
+
+
 def _announce(token: str | None) -> None:
     if token is None:
         logger.warning(
@@ -63,8 +84,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if log_file is not None:
             logger.info("logging to %s", log_file)
         await _apply_stored_log_level(services)
-        app.state.setup_token = resolve_setup_token(settings)
-        _announce(app.state.setup_token)
+        # Only while there is nobody to log in as. Printing it on every restart of a
+        # configured instance puts a live-looking secret in the log for no reason, and trains
+        # whoever reads that log to ignore the one time it matters.
+        if await setup_is_pending(services):
+            app.state.setup_token = resolve_setup_token(settings)
+            _announce(app.state.setup_token)
+        else:
+            app.state.setup_token = None
         # A container that was killed rather than shut down leaves an X server and a browser
         # holding a profile directory, which stops the next login from opening it.
         await services.browser.reap_orphans()

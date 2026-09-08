@@ -5,7 +5,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from lifeline.api.app import create_app, resolve_setup_token
+from sqlalchemy.exc import OperationalError
+
+from lifeline.api.app import create_app, resolve_setup_token, setup_is_pending
+from lifeline.models import User
 from lifeline.config import SETUP_TOKEN_DISABLED, Settings
 
 
@@ -142,3 +145,30 @@ class TestLifespan:
                 pass
 
         assert "test-setup-token" in caplog.text
+
+    async def test_says_nothing_once_an_administrator_exists(
+        self, settings: Settings, admin: User, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # A configured instance restarting has no wizard to guard, and a token in its log is a
+        # live-looking secret that means nothing.
+        import logging
+
+        app = create_app(settings)
+
+        with caplog.at_level(logging.INFO):
+            async with app.router.lifespan_context(app):
+                assert app.state.setup_token is None
+
+        assert "test-setup-token" not in caplog.text
+
+    async def test_guards_the_wizard_when_the_database_cannot_be_read(self) -> None:
+        # Guessing "already set up" from a failed read would leave the wizard open on an
+        # instance that turns out to be empty.
+        assert await setup_is_pending(_BrokenServices())
+
+
+class _BrokenServices:
+    """Services whose database refuses to answer."""
+
+    def sessionmaker(self) -> object:
+        raise OperationalError("select", {}, Exception("no such table"))
