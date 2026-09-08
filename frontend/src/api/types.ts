@@ -53,3 +53,29 @@ export const emptySite: Required<SiteWrite> = {
   inactivity_limit_days: null,
   notes: null,
 };
+
+/**
+ * The writable half of a site, for a form or for changing one field.
+ *
+ * Every field is named rather than spread from the site, so the request carries exactly what the
+ * API accepts and a read-only field added to SiteRead cannot leak into an update.
+ */
+export function toWrite(site: Site): SiteWrite {
+  return {
+    name: site.name,
+    ping_url: site.ping_url,
+    login_url: site.login_url,
+    enabled: site.enabled,
+    interval_days: site.interval_days,
+    jitter_percent: site.jitter_percent,
+    ping_method: site.ping_method,
+    user_agent: site.user_agent,
+    expected_status: site.expected_status,
+    follow_redirects: site.follow_redirects,
+    login_url_pattern: site.login_url_pattern,
+    success_pattern: site.success_pattern,
+    failure_pattern: site.failure_pattern,
+    inactivity_limit_days: site.inactivity_limit_days,
+    notes: site.notes,
+  };
+}

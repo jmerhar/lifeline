@@ -10,13 +10,13 @@ import { KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import type { Site, SiteWrite } from "../api/types";
+import { toWrite, type Site, type SiteWrite } from "../api/types";
 import { PulseStrip } from "../components/PulseStrip";
 import { StatusBadge } from "../components/StatusBadge";
-import { Button, Card, Empty, Problem, Spinner } from "../components/ui";
+import { Button, Card, Empty, Problem, Spinner, Switch } from "../components/ui";
 import { countdown, relativeTime, summarise, timestamp } from "../lib/format";
 import { SessionPanel } from "./SessionPanel";
-import { SiteForm } from "./SiteForm";
+import { SiteForm, type Tab } from "./SiteForm";
 
 export function Sites() {
   const client = useQueryClient();
@@ -24,25 +24,52 @@ export function Sites() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 
   const [editing, setEditing] = useState<Site | null | undefined>(undefined);
+  const [editingTab, setEditingTab] = useState<Tab>("site");
   const [loggingInto, setLoggingInto] = useState<Site | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Separate from saveError, which is rendered inside the form: an action taken from the list
+  // itself has no form open to report into.
+  const [listError, setListError] = useState<string | null>(null);
 
   const refresh = () => client.invalidateQueries({ queryKey: ["sites"] });
+
+  /** Open the editor on a site, on a given panel. */
+  const edit = (site: Site, tab: Tab = "site") => {
+    setEditingTab(tab);
+    setEditing(site);
+  };
 
   const save = useMutation({
     mutationFn: (payload: SiteWrite) =>
       editing ? api.updateSite(editing.id, payload) : api.createSite(payload),
-    onSuccess: async () => {
-      setEditing(undefined);
+    onSuccess: async (saved, _payload, context) => {
       setSaveError(null);
+      setEditing(undefined);
       await refresh();
+      // A new site continues into the login rather than stopping here: the one question the add
+      // form does not ask cannot be answered until someone has seen the site logged in.
+      if (context === undefined) setLoggingInto(saved);
     },
+    // The site being edited at the moment the request goes out, so the handler above can tell an
+    // update from a creation without reading state that has since been cleared.
+    onMutate: () => editing ?? undefined,
     onError: (cause) =>
       setSaveError(cause instanceof ApiError ? cause.message : "The site could not be saved."),
   });
 
   const check = useMutation({ mutationFn: api.checkNow, onSuccess: refresh });
+  // Pausing a site is a one-click decision made while looking at the list, not a reason to open
+  // a form. Sent as a whole site because that is what the API accepts.
+  const setEnabled = useMutation({
+    mutationFn: ({ site, enabled }: { site: Site; enabled: boolean }) =>
+      api.updateSite(site.id, { ...toWrite(site), enabled }),
+    onSuccess: refresh,
+    // Cleared as the request goes out, not after it settles — settling includes failing, which
+    // would wipe the message the failure just set.
+    onMutate: () => setListError(null),
+    onError: () => setListError("The site could not be paused."),
+  });
   const remove = useMutation({ mutationFn: api.deleteSite, onSuccess: refresh });
 
   if (sites.isPending) return <Spinner label="Loading sites…" />;
@@ -60,6 +87,8 @@ export function Sites() {
         </Button>
       </div>
 
+      {listError ? <Problem>{listError}</Problem> : null}
+
       <Card>
         {rows.length === 0 ? (
           <Empty
@@ -73,9 +102,10 @@ export function Sites() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-small">
+            <table className="w-full min-w-[880px] border-collapse text-small">
               <thead>
                 <tr className="border-b border-line text-left text-micro text-muted">
+                  <th className="px-3 py-2 font-medium">On</th>
                   <th className="px-3 py-2 font-medium">Site</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Pulse</th>
@@ -93,10 +123,12 @@ export function Sites() {
                     site={site}
                     expanded={expanded === site.id}
                     onToggle={() => setExpanded(expanded === site.id ? null : site.id)}
-                    onEdit={() => setEditing(site)}
+                    onEdit={() => edit(site)}
                     onLogin={() => setLoggingInto(site)}
                     onCheck={() => check.mutate(site.id)}
                     checking={check.isPending && check.variables === site.id}
+                    onEnabled={(enabled) => setEnabled.mutate({ site, enabled })}
+                    switching={setEnabled.isPending && setEnabled.variables?.site.id === site.id}
                     onDelete={() => {
                       if (
                         window.confirm(
@@ -118,6 +150,7 @@ export function Sites() {
         <SiteForm
           site={editing}
           defaultIntervalDays={settings.data?.default_interval_days ?? 7}
+          initialTab={editingTab}
           error={saveError}
           busy={save.isPending}
           onCancel={() => {
@@ -133,8 +166,13 @@ export function Sites() {
           site={loggingInto}
           onClose={() => setLoggingInto(null)}
           onSaved={async () => {
+            const site = loggingInto;
             setLoggingInto(null);
             await refresh();
+            // Straight to the panel the login has just made answerable, with the fresh session
+            // attached so the comparison is offered rather than explained away.
+            const saved = (await api.sites()).find((row) => row.id === site.id);
+            if (saved) edit(saved, "detection");
           }}
         />
       ) : null}
@@ -150,7 +188,9 @@ function SiteRow({
   onLogin,
   onCheck,
   onDelete,
+  onEnabled,
   checking,
+  switching,
 }: {
   site: Site;
   expanded: boolean;
@@ -159,11 +199,21 @@ function SiteRow({
   onLogin: () => void;
   onCheck: () => void;
   onDelete: () => void;
+  onEnabled: (enabled: boolean) => void;
   checking: boolean;
+  switching: boolean;
 }) {
   return (
     <>
       <tr className={`border-b border-line/60 ${site.enabled ? "" : "opacity-60"}`}>
+        <td className="px-3 py-2">
+          <Switch
+            checked={site.enabled}
+            onChange={onEnabled}
+            busy={switching}
+            label={site.enabled ? `Pause ${site.name}` : `Resume ${site.name}`}
+          />
+        </td>
         <td className="px-3 py-2">
           <button
             type="button"
@@ -219,7 +269,7 @@ function SiteRow({
       </tr>
       {expanded ? (
         <tr className="border-b border-line/60 bg-raised/40">
-          <td colSpan={6} className="px-3 py-3">
+          <td colSpan={7} className="px-3 py-3">
             <dl className="grid gap-x-6 gap-y-2 text-micro sm:grid-cols-3">
               <Detail label="Ping URL">
                 <span className="font-mono break-all">{site.ping_url}</span>

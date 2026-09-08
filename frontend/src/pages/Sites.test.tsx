@@ -10,16 +10,18 @@ import { makeSite } from "../test/factories";
 import { render } from "../test/render";
 import { server } from "../test/server";
 
-/**
- * Fill in the form's first step and cross into the second.
- *
- * The name and the ping URL are required, so the browser refuses to advance without them —
- * which is why a test that only wants to look at the second step still has to fill them.
- */
+/** Fill in the add form's two required fields. */
 async function fillTheSite(form: ReturnType<typeof within>, name: string, url: string) {
   await userEvent.type(form.getByLabelText(/^Name/), name);
   await userEvent.type(form.getByLabelText(/Ping URL/), url);
-  await userEvent.click(form.getByRole("button", { name: "Next" }));
+}
+
+/** Open an existing site's editor on one of its tabs. */
+async function openTab(label: RegExp) {
+  await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+  const form = within(screen.getByRole("dialog"));
+  await userEvent.click(form.getByRole("tab", { name: label }));
+  return form;
 }
 
 describe("Sites", () => {
@@ -54,7 +56,8 @@ describe("Sites", () => {
 
     // Asserted on the cell's structure, not on absent text: an empty reason element renders
     // nothing a text query can look for, so a query alone would pass however the row is built.
-    const status = document.querySelectorAll("tbody tr td")[1]!;
+    // Third cell: the switch, the site, then the status.
+    const status = document.querySelectorAll("tbody tr td")[2]!;
     expect(status.children).toHaveLength(1);
     expect(screen.queryByText(/before the next check/)).not.toBeInTheDocument();
   });
@@ -69,7 +72,8 @@ describe("Sites", () => {
     render(<Sites />);
     await screen.findByText("due soon");
 
-    const status = document.querySelectorAll("tbody tr td")[1]!;
+    // Third cell: the switch, the site, then the status.
+    const status = document.querySelectorAll("tbody tr td")[2]!;
     expect(status.children).toHaveLength(2);
     expect(status.textContent).toContain("the account lapses in 4 day(s)");
   });
@@ -168,8 +172,7 @@ describe("Sites", () => {
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
     await fillTheSite(form, "new site", "https://new.example.org/home");
-    await userEvent.type(form.getByLabelText(/Login page looks like/), "login.php");
-    await userEvent.click(form.getByRole("button", { name: "Add site" }));
+    await userEvent.click(form.getByRole("button", { name: "Add site and log in" }));
 
     await waitFor(() => expect(created).toHaveLength(1));
     expect(created[0]).toMatchObject({
@@ -190,8 +193,7 @@ describe("Sites", () => {
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
     await fillTheSite(form, "example", "https://example.org/home");
-    await userEvent.type(form.getByLabelText(/Login page looks like/), "login.php");
-    await userEvent.click(form.getByRole("button", { name: "Add site" }));
+    await userEvent.click(form.getByRole("button", { name: "Add site and log in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
   });
@@ -211,8 +213,7 @@ describe("Sites", () => {
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
     await fillTheSite(form, "bare", "https://bare.example.org/");
-    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
-    await userEvent.click(form.getByRole("button", { name: "Add site" }));
+    await userEvent.click(form.getByRole("button", { name: "Add site and log in" }));
 
     await waitFor(() => expect(created).toHaveLength(1));
     expect(created[0]!.success_pattern).toBeNull();
@@ -228,7 +229,7 @@ describe("Sites", () => {
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByLabelText(/^Name/)).toHaveValue("example");
 
-    await userEvent.click(dialog.getByRole("button", { name: "Next" }));
+    await userEvent.click(dialog.getByRole("tab", { name: /Spotting a dead session/ }));
 
     expect(dialog.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
   });
@@ -312,7 +313,12 @@ describe("Sites", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save session" }));
 
     await waitFor(() => expect(listings).toBeGreaterThan(before));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // The login hands straight over to the panel it has just made answerable, rather than
+    // leaving someone on the list wondering what to do next.
+    expect(await screen.findByRole("tab", { name: /Spotting a dead session/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("shows the site's own icon when it has one", async () => {
@@ -357,13 +363,11 @@ describe("Sites", () => {
 
 describe("the site form's examples", () => {
   it("labels the pattern examples as examples", async () => {
-    // "Enter your password" as a bare placeholder reads as an instruction to type one — in a form
-    // where a password field would be entirely plausible.
+    // A bare placeholder reads as an instruction, in a form where a credential field would be
+    // entirely plausible.
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "anything", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
     for (const label of [/Login page looks like/, /Page must contain/, /Page must not contain/]) {
       expect(form.getByLabelText(label)).toHaveAttribute(
@@ -378,9 +382,7 @@ describe("the site form's examples", () => {
     // password manager fill it in and then offer to save a login for the whole form.
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "anything", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
     for (const field of form.getAllByRole("textbox")) {
       expect(field.getAttribute("placeholder") ?? "").not.toMatch(/password/i);
@@ -390,9 +392,7 @@ describe("the site form's examples", () => {
   it("tells every password manager to leave the pattern fields alone", async () => {
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "anything", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
     const field = form.getByLabelText(/Page must not contain/);
     expect(field).toHaveAttribute("autocomplete", "off");
@@ -404,8 +404,10 @@ describe("the site form's examples", () => {
   });
 });
 
-describe("the site form's two steps", () => {
-  it("asks what the site is before asking how to judge it", async () => {
+describe("adding a site", () => {
+  it("asks only what the site is, and nothing it cannot answer yet", async () => {
+    // The detection question needs a page seen both signed in and signed out. Asking it here
+    // offered a disabled option and three fields nobody could fill.
     render(<Sites />);
     await screen.findByText("example");
 
@@ -414,66 +416,156 @@ describe("the site form's two steps", () => {
 
     expect(form.getByLabelText(/^Name/)).toBeInTheDocument();
     expect(form.queryByLabelText(/Login page looks like/)).not.toBeInTheDocument();
+    expect(form.queryByRole("radio")).not.toBeInTheDocument();
   });
 
-  it("goes back to the first step with what was typed still there", async () => {
+  it("can be saved with nothing but a name and a URL", async () => {
+    // Never blocked: there is no rule to give yet, and a form that will not submit is the bug
+    // this replaced.
     render(<Sites />);
     await screen.findByText("example");
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "kept", "https://example.org/home");
+    await fillTheSite(form, "minimal", "https://example.org/home");
 
-    await userEvent.click(form.getByRole("button", { name: "Back" }));
+    expect(form.getByRole("button", { name: "Add site and log in" })).toBeEnabled();
+  });
 
-    expect(form.getByLabelText(/^Name/)).toHaveValue("kept");
+  it("keeps notes with the rest of the site, not filed under rarely needed", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.getByLabelText(/^Notes/)).toBeInTheDocument();
+  });
+
+  it("opens the login as soon as the site exists", async () => {
+    server.use(
+      http.post("/api/sites", () => HttpResponse.json(makeSite({ name: "fresh" }), { status: 201 })),
+      http.post("/api/sites/1/login-session", () =>
+        HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "fresh", "https://example.org/home");
+
+    await userEvent.click(form.getByRole("button", { name: "Add site and log in" }));
+
+    expect(await screen.findByText(/Log in to fresh/)).toBeInTheDocument();
+  });
+
+  it("does not open a login when an edit is saved", async () => {
+    server.use(http.put("/api/sites/1", () => HttpResponse.json(makeSite())));
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByText(/Log in to example/)).not.toBeInTheDocument();
+  });
+});
+
+describe("editing a site", () => {
+  it("offers its settings as tabs rather than as a sequence", async () => {
+    // Nothing has to be walked past to reach the one thing someone came to change.
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.getAllByRole("tab")).toHaveLength(3);
+    expect(form.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
+  });
+
+  it("keeps what was typed on one tab while another is open", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+    await userEvent.clear(form.getByLabelText(/^Name/));
+    await userEvent.type(form.getByLabelText(/^Name/), "renamed");
+
+    await userEvent.click(form.getByRole("tab", { name: /Rarely needed/ }));
+    await userEvent.click(form.getByRole("tab", { name: /The site/ }));
+
+    expect(form.getByLabelText(/^Name/)).toHaveValue("renamed");
   });
 
   it("refuses to save a site that could not tell a dead session apart", async () => {
     // Individually optional, collectively load-bearing: with none of them set a check reports
     // only that the site answered. Saying so beats saving something that notices nothing.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+        ]),
+      ),
+    );
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "unjudgeable", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
-    expect(form.getByRole("button", { name: "Add site" })).toBeDisabled();
+    await userEvent.click(form.getByRole("radio", { name: /Set them myself/ }));
+
+    expect(form.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(form.getByText(/could not tell a dead session/)).toBeInTheDocument();
   });
 
   it("allows it once a rule is given", async () => {
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "judgeable", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
+    await userEvent.clear(form.getByLabelText(/Login page looks like/));
 
     await userEvent.type(form.getByLabelText(/Page must contain/), "Log out");
 
-    expect(form.getByRole("button", { name: "Add site" })).toBeEnabled();
+    expect(form.getByRole("button", { name: "Save changes" })).toBeEnabled();
   });
 
   it("allows it when not detecting is chosen deliberately", async () => {
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "unwatched", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
     await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
 
-    expect(form.getByRole("button", { name: "Add site" })).toBeEnabled();
+    expect(form.getByRole("button", { name: "Save changes" })).toBeEnabled();
   });
 
-  it("cannot offer to work it out for a site with no session yet", async () => {
+  it("cannot offer to work it out for a site with no session", async () => {
+    server.use(http.get("/api/sites", () => HttpResponse.json([makeSite({ session: null })])));
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
-    const form = within(screen.getByRole("dialog"));
-    await fillTheSite(form, "new", "https://example.org/home");
+    const form = await openTab(/Spotting a dead session/);
 
     expect(form.getByRole("radio", { name: /Work it out/ })).toBeDisabled();
-    expect(form.getByText(/Available once you have logged in/)).toBeInTheDocument();
+    expect(form.getByText(/Log in to this site first/)).toBeInTheDocument();
+  });
+
+  it("starts on the comparison for a site whose login was just captured", async () => {
+    // No rules but a session means the login has just been taken, which is when the comparison
+    // is both possible and the reason someone is looking at this panel.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+        ]),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    expect(form.getByRole("radio", { name: /Work it out/ })).toBeChecked();
   });
 
   it("fills the rules in from a comparison, and says what it found", async () => {
@@ -500,9 +592,7 @@ describe("the site form's two steps", () => {
     );
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
-    const form = within(screen.getByRole("dialog"));
-    await userEvent.click(form.getByRole("button", { name: "Next" }));
+    const form = await openTab(/Spotting a dead session/);
 
     await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
     await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
@@ -523,13 +613,95 @@ describe("the site form's two steps", () => {
     );
     render(<Sites />);
     await screen.findByText("example");
-    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
-    const form = within(screen.getByRole("dialog"));
-    await userEvent.click(form.getByRole("button", { name: "Next" }));
+    const form = await openTab(/Spotting a dead session/);
 
     await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
     await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
 
     expect(await form.findByRole("alert")).toHaveTextContent("could not reach the site");
+  });
+});
+
+describe("pausing a site from the list", () => {
+  it("switches a site off without opening a form", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite({ enabled: false }));
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Pause example" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.enabled).toBe(false);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("switches a paused site back on", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.get("/api/sites", () => HttpResponse.json([makeSite({ enabled: false })])),
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Resume example" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.enabled).toBe(true);
+  });
+
+  it("says so when a site could not be paused", async () => {
+    server.use(
+      http.put("/api/sites/1", () => HttpResponse.json({ detail: "nope" }, { status: 500 })),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Pause example" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be paused");
+  });
+
+  it("keeps the rest of the site's settings when only pausing it", async () => {
+    // Sent as a whole site, so a field left out here would be silently reset.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite({ enabled: false }));
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Pause example" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({
+      name: "example",
+      ping_url: "https://example.org/home",
+      login_url_pattern: "login.php",
+      interval_days: 7,
+    });
+  });
+
+  it("reflects the state a site is already in", async () => {
+    server.use(http.get("/api/sites", () => HttpResponse.json([makeSite({ enabled: false })])));
+    render(<Sites />);
+    await screen.findByText("example");
+
+    expect(screen.getByRole("switch", { name: "Resume example" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 });
