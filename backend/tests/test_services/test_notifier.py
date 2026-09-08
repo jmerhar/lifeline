@@ -106,7 +106,9 @@ class TestCooldown:
 
         await notifier.notify(row, Event.LAPSED, make_site(id=1, name="one"), now=NOW)
 
-        assert await notifier.notify(row, Event.LAPSED, make_site(id=2, name="two"), now=NOW) is True
+        sent = await notifier.notify(row, Event.LAPSED, make_site(id=2, name="two"), now=NOW)
+
+        assert sent is True
 
     async def test_cooldowns_are_per_event(self, notifier: Notifier) -> None:
         row = settings_with()

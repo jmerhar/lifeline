@@ -78,7 +78,7 @@ class TestTestNotification:
         response = await logged_in.post("/api/settings/test-notification")
 
         assert response.json()["detail"] == "test notification sent"
-        assert "test notification" in sender.titles[0]
+        assert "Test notification" in sender.titles[0]
 
     async def test_says_so_when_there_is_nowhere_to_send(
         self, logged_in: httpx.AsyncClient
@@ -98,7 +98,13 @@ class TestHistory:
 
         base = datetime(2026, 6, 1, tzinfo=UTC)
         for offset, outcome in enumerate([CheckOutcome.OK, CheckOutcome.LOGIN_EXPIRED]):
-            db.add(Check(site_id=site.id, started_at=base + timedelta(hours=offset), outcome=outcome))
+            db.add(
+                Check(
+                    site_id=site.id,
+                    started_at=base + timedelta(hours=offset),
+                    outcome=outcome,
+                )
+            )
         await db.commit()
 
         body = (await logged_in.get("/api/checks")).json()

@@ -100,12 +100,17 @@ def build(event: Event, site: Site | None = None, detail: str | None = None) -> 
 
     Written as something to act on rather than a status dump: the point of the message is
     that someone has to go and log in.
+
+    The title names the site and what it needs, and nothing else. Which application sent this
+    is already in the sender — the address a mailto: URL was configured with, the bot a
+    Telegram token belongs to — so repeating it costs the front of every subject line, which
+    is the part a phone notification has room for.
     """
     match event:
         case Event.LAPSED:
             return Notification(
                 event,
-                f"lifeline: {site.name} needs a new login" if site else "lifeline",
+                f"{site.name} needs a new login" if site else "A session needs a new login",
                 f"The session for {_describe(site)} is no longer valid.\n\n"
                 f"{detail or 'The site did not accept the stored session.'}\n\n"
                 "Open lifeline and log in again to keep the account active.",
@@ -113,13 +118,13 @@ def build(event: Event, site: Site | None = None, detail: str | None = None) -> 
         case Event.RECOVERED:
             return Notification(
                 event,
-                f"lifeline: {site.name} is alive again",
+                f"{site.name} is alive again",
                 f"The session for {_describe(site)} is working again. Nothing to do.",
             )
         case Event.ERRORS:
             return Notification(
                 event,
-                f"lifeline: {site.name} cannot be reached",
+                f"{site.name} cannot be reached",
                 f"Checks against {_describe(site)} keep failing.\n\n"
                 f"{detail or 'No further detail.'}\n\n"
                 "The stored session has not been touched; this looks like the site or the "
@@ -128,13 +133,13 @@ def build(event: Event, site: Site | None = None, detail: str | None = None) -> 
         case Event.AT_RISK:
             return Notification(
                 event,
-                f"lifeline: {site.name} is running out of time",
+                f"{site.name} is running out of time",
                 f"{_describe(site)}: {detail}\n\nLog in again before then.",
             )
         case Event.TEST:
             return Notification(
                 event,
-                "lifeline: test notification",
+                "Test notification",
                 "If you are reading this, notifications are configured correctly.",
             )
 
@@ -154,7 +159,9 @@ class Notifier:
         # and a restart is a reasonable moment to be told again about a still-dead session.
         self._last_sent: dict[tuple[int | None, Event], datetime] = {}
 
-    def _suppressed_until(self, key: tuple[int | None, Event], cooldown: timedelta) -> datetime | None:
+    def _suppressed_until(
+        self, key: tuple[int | None, Event], cooldown: timedelta
+    ) -> datetime | None:
         sent_at = self._last_sent.get(key)
         return None if sent_at is None else sent_at + cooldown
 
