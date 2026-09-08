@@ -324,8 +324,8 @@ class TestRunDue:
     async def test_checks_every_due_site(
         self, db: AsyncSession, make_runner: Callable[..., CheckRunner], cipher: Cipher
     ) -> None:
-        from tests.conftest import SAMPLE_STATE, make_site
         from lifeline.models import SiteSession
+        from tests.conftest import SAMPLE_STATE, make_site
 
         for name in ("one", "two"):
             row = make_site(id=None, name=name)
@@ -440,7 +440,9 @@ class TestStoreSession:
         await runner.run(logged_in_site.id, now=NOW)
         assert len(sender.sent) == 1
 
-        await make_runner().store_session(logged_in_site.id, ROTATED_STATE, CaptureMethod.BROWSER, now=NOW)
+        await make_runner().store_session(
+            logged_in_site.id, ROTATED_STATE, CaptureMethod.BROWSER, now=NOW
+        )
         await runner.run(logged_in_site.id, now=NOW)
 
         assert len(sender.sent) == 2

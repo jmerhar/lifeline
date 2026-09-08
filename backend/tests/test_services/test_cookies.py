@@ -389,7 +389,10 @@ class TestScopingToTheSite:
 
     def test_keeps_a_subdomain_cookie(self) -> None:
         # A login that set something on auth.example.org while the site is example.org.
-        state = {"cookies": [{"name": "s", "value": "v", "domain": "auth.example.org", "path": "/"}],
+        state = {
+            "cookies": [
+                {"name": "s", "value": "v", "domain": "auth.example.org", "path": "/"}
+            ],
                  "origins": []}
 
         assert cookie_names(for_host(state, "example.org")) == ["s"]
@@ -401,11 +404,13 @@ class TestScopingToTheSite:
 
 class TestExpiresAt:
     def test_reports_the_last_expiry_not_the_first(self) -> None:
-        # The first is a fifteen-minute analytics cookie; it says nothing about the session. The last
+        # The first is a fifteen-minute analytics cookie; it says nothing about the session. The
+        # last
         # is the point after which nothing stored here can work.
         state = empty_state()
         state["cookies"] = [
-            {"name": "_dd_s", "value": "a", "domain": "x.org", "path": "/", "expires": 1757347245.0},
+            {"name": "_dd_s", "value": "a", "domain": "x.org", "path": "/",
+             "expires": 1757347245.0},
             {"name": "session", "value": "s", "domain": "x.org", "path": "/", "expires": FUTURE},
         ]
 

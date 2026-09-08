@@ -7,7 +7,6 @@ jar and back, so both ping methods share one stored representation.
 """
 
 import json
-import re
 from datetime import UTC, datetime
 from http.cookiejar import Cookie
 from typing import Any, TypedDict
@@ -355,42 +354,86 @@ def expires_at(state: StorageState) -> datetime | None:
     return datetime.fromtimestamp(max(expiries), tz=UTC)
 
 
-def for_host(state: StorageState, host: str) -> StorageState:
-    """Keep only the cookies that belong to ``host`` or a domain it sits under.
+def for_host(state: StorageState, *hosts: str) -> StorageState:
+    """Keep only the cookies belonging to one of ``hosts``, or to a domain one sits under.
 
     A browser used for a login collects cookies from everything it touched, which is how a session
     captured for one site came to hold another site's login cookies entirely. They are never sent
     anywhere — a request only carries cookies matching its own host — so dropping them costs
     nothing, and keeping somebody's unrelated session encrypted in this database is not something
     to do by accident.
+
+    Several hosts because a login often does not happen on the host being pinged: an account
+    served from one name and signed into on another is one site, and scoping to the pinged host
+    alone would throw away the very cookie the login just produced.
+
+    A scoping that would keep nothing is refused, and the state returned unchanged. Emptying a
+    captured session is never the right answer — whatever produced that result is a bug or an
+    unforeseen shape, and losing the login is a far worse outcome than keeping a few cookies that
+    will never be sent.
     """
-    if not host:
+    known = [_canonical(host) for host in hosts if host]
+    if not known:
         return state
-    kept = [cookie for cookie in state["cookies"] if _belongs_to(cookie.get("domain", ""), host)]
+    kept = [
+        cookie for cookie in state["cookies"] if _belongs_to_any(cookie.get("domain", ""), known)
+    ]
+    if state["cookies"] and not kept:
+        return state
     origins = [
         origin
         for origin in state["origins"]
-        if _belongs_to(urlsplit(origin["origin"]).hostname or "", host)
+        if _belongs_to_any(urlsplit(origin["origin"]).hostname or "", known)
     ]
     return {"cookies": kept, "origins": origins}
 
 
+def _canonical(host: str) -> str:
+    """A host in the form a cookie domain is written in: lower case, ASCII, no bounding dots.
+
+    A non-ASCII host reaches a cookie jar already punycoded, because that is what goes on the
+    wire, while the URL it came from still spells it in Unicode. Comparing the two forms directly
+    matches nothing, which would drop every cookie such a site sets.
+    """
+    host = host.strip(".").lower()
+    try:
+        return host.encode("idna").decode("ascii")
+    except (UnicodeError, UnicodeDecodeError):
+        # Not a name IDNA can express — an IP address, or something malformed. Compared as it is.
+        return host
+
+
+def _belongs_to_any(domain: str, hosts: list[str]) -> bool:
+    """Whether a cookie domain relates to any of ``hosts``."""
+    return any(_belongs_to(domain, host) for host in hosts)
+
+
 def _belongs_to(domain: str, host: str) -> bool:
-    """Whether a cookie domain covers ``host``, or is a name under it."""
-    domain = domain.lstrip(".").lower()
-    host = host.lstrip(".").lower()
+    """Whether a cookie domain covers ``host``, or is a name under it.
+
+    Deliberately permissive in one direction: a cookie on a *sub*domain of the site is kept, since
+    a login on one is part of the same site. The consequence is that a cookie whose domain is a
+    public suffix (``.co.uk``) is treated as covering everything under it. No browser will set
+    such a cookie, and the cost of being wrong here is keeping a cookie that is never sent, so it
+    is not worth a public-suffix list to rule out.
+    """
+    domain = _canonical(domain)
+    host = _canonical(host)
     if not domain:
         return False
     return domain == host or host.endswith(f".{domain}") or domain.endswith(f".{host}")
 
 
-def foreign_domains(state: StorageState, host: str) -> list[str]:
-    """The cookie domains in ``state`` that do not belong to ``host``, for logging."""
+def foreign_domains(state: StorageState, *hosts: str) -> list[str]:
+    """The cookie domains in ``state`` that relate to none of ``hosts``, for logging."""
+    known = [_canonical(host) for host in hosts if host]
+    if not known:
+        return []
     return sorted(
         {
             cookie.get("domain", "")
             for cookie in state["cookies"]
-            if not _belongs_to(cookie.get("domain", ""), host)
+            if not _belongs_to_any(cookie.get("domain", ""), known)
         }
     )
 

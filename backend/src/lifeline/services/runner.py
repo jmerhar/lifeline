@@ -37,6 +37,16 @@ logger = logging.getLogger(__name__)
 _LOGGED_OUT_STATUSES = (SiteStatus.LAPSED,)
 
 
+def _hosts_of(site: Site) -> list[str]:
+    """Every host a site legitimately keeps a session on.
+
+    The pinged host and the host the login happens on. They are usually the same name, and when
+    they are not, both belong to the same account.
+    """
+    hosts = {urlsplit(site.ping_url).hostname, urlsplit(site.effective_login_url).hostname}
+    return sorted(host for host in hosts if host)
+
+
 class CheckRunner:
     """Performs checks and applies what they mean to a site.
 
@@ -153,7 +163,7 @@ class CheckRunner:
         return check
 
     def _save_state(self, site: Site, stored: SiteSession, state: StorageState) -> StorageState:
-        """Persist a session, scoped to the site it belongs to, and return what was stored.
+        """Persist a session, scoped to the hosts the site involves, and return what was stored.
 
         Returned rather than kept to itself because the scoping happens here: a caller that
         logged the state it passed in would report cookies that were dropped on the way.
@@ -162,16 +172,31 @@ class CheckRunner:
         the ones belonging elsewhere are dropped — on every write rather than only on capture,
         so a session that already holds them is cleaned by the next check instead of needing a
         fresh login.
+
+        Both of the site's own hosts count: an account signed into on a different name from the
+        one being pinged is still one site, and scoping to the pinged host alone would discard the
+        cookie the login just produced.
         """
-        host = urlsplit(site.ping_url).hostname or ""
-        dropped = foreign_domains(state, host)
-        if dropped:
+        hosts = _hosts_of(site)
+        dropped = foreign_domains(state, *hosts)
+        scoped = for_host(state, *hosts)
+        if dropped and len(scoped["cookies"]) < len(state["cookies"]):
             logger.info(
                 "%s: not storing cookies for %s — they belong to another site",
                 site.name,
                 ", ".join(dropped),
             )
-        state = for_host(state, host)
+        elif dropped:
+            # Scoping declined to leave nothing behind. Every cookie looking foreign means the
+            # site's own URLs do not describe where it actually keeps the session.
+            logger.warning(
+                "%s: keeping cookies for %s — none of them look like they belong to %s, and "
+                "storing nothing would lose the login",
+                site.name,
+                ", ".join(dropped),
+                " or ".join(hosts),
+            )
+        state = scoped
         stored.state = self._cipher.encrypt_json(state)
         stored.expires_at = expires_at(state)
         stored.cookie_names = ",".join(cookie_names(state))
