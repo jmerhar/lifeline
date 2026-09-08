@@ -126,6 +126,54 @@
         "title": "CookieImport",
         "type": "object"
       },
+      "DetectedRules": {
+        "description": "What a signed-in and a signed-out fetch of the same page suggest.\n\nOffered rather than applied: these are a starting point someone reads and corrects, and a\nrule that silently appeared is a rule nobody knows is there.",
+        "properties": {
+          "failure_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Pattern"
+          },
+          "login_url_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url Pattern"
+          },
+          "notes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "success_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pattern"
+          }
+        },
+        "title": "DetectedRules",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1664,6 +1712,49 @@
           }
         },
         "summary": "History",
+        "tags": [
+          "sites"
+        ]
+      }
+    },
+    "/api/sites/{site_id}/detect": {
+      "post": {
+        "description": "Work out how to tell this site's live session from a dead one.\n\nFetches the ping URL twice, once with the stored session and once with no cookies, and\nreports what differs. Needs a session, because half the comparison is what the page looks\nlike to somebody who is logged in.",
+        "operationId": "detect_api_sites__site_id__detect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectedRules"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detect",
         "tags": [
           "sites"
         ]

@@ -315,6 +315,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sites/{site_id}/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detect
+         * @description Work out how to tell this site's live session from a dead one.
+         *
+         *     Fetches the ping URL twice, once with the stored session and once with no cookies, and
+         *     reports what differs. Needs a session, because half the comparison is what the page looks
+         *     like to somebody who is logged in.
+         */
+        post: operations["detect_api_sites__site_id__detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sites/{site_id}/login-session": {
         parameters: {
             query?: never;
@@ -424,6 +448,26 @@ export interface components {
             text: string;
             /** User Agent */
             user_agent?: string | null;
+        };
+        /**
+         * DetectedRules
+         * @description What a signed-in and a signed-out fetch of the same page suggest.
+         *
+         *     Offered rather than applied: these are a starting point someone reads and corrects, and a
+         *     rule that silently appeared is a rule nobody knows is there.
+         */
+        DetectedRules: {
+            /** Failure Pattern */
+            failure_pattern?: string | null;
+            /** Login Url Pattern */
+            login_url_pattern?: string | null;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+            /** Success Pattern */
+            success_pattern?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1332,6 +1376,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_api_sites__site_id__detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectedRules"];
                 };
             };
             /** @description Validation Error */

@@ -9,6 +9,7 @@
 
 import type {
   Check,
+  DetectedRules,
   LoginSession,
   Settings,
   Site,
@@ -98,6 +99,8 @@ function detailOf(body: { detail?: unknown } | null): string | null {
 const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
 export const api = {
+  detectRules: (id: number) =>
+    request<DetectedRules>(`/sites/${id}/detect`, { method: "POST" }),
   setupState: () => request<SetupState>("/setup"),
   completeSetup: (payload: { username: string; password: string; token?: string }) =>
     request<User>("/setup", { method: "POST", ...json(payload) }),

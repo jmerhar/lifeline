@@ -10,6 +10,18 @@ import { makeSite } from "../test/factories";
 import { render } from "../test/render";
 import { server } from "../test/server";
 
+/**
+ * Fill in the form's first step and cross into the second.
+ *
+ * The name and the ping URL are required, so the browser refuses to advance without them —
+ * which is why a test that only wants to look at the second step still has to fill them.
+ */
+async function fillTheSite(form: ReturnType<typeof within>, name: string, url: string) {
+  await userEvent.type(form.getByLabelText(/^Name/), name);
+  await userEvent.type(form.getByLabelText(/Ping URL/), url);
+  await userEvent.click(form.getByRole("button", { name: "Next" }));
+}
+
 describe("Sites", () => {
   it("lists a site with its state and host", async () => {
     render(<Sites />);
@@ -155,8 +167,8 @@ describe("Sites", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
-    await userEvent.type(form.getByLabelText(/^Name/), "new site");
-    await userEvent.type(form.getByLabelText(/Ping URL/), "https://new.example.org/home");
+    await fillTheSite(form, "new site", "https://new.example.org/home");
+    await userEvent.type(form.getByLabelText(/Login page looks like/), "login.php");
     await userEvent.click(form.getByRole("button", { name: "Add site" }));
 
     await waitFor(() => expect(created).toHaveLength(1));
@@ -177,8 +189,8 @@ describe("Sites", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
-    await userEvent.type(form.getByLabelText(/^Name/), "example");
-    await userEvent.type(form.getByLabelText(/Ping URL/), "https://example.org/home");
+    await fillTheSite(form, "example", "https://example.org/home");
+    await userEvent.type(form.getByLabelText(/Login page looks like/), "login.php");
     await userEvent.click(form.getByRole("button", { name: "Add site" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
@@ -198,8 +210,8 @@ describe("Sites", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
-    await userEvent.type(form.getByLabelText(/^Name/), "bare");
-    await userEvent.type(form.getByLabelText(/Ping URL/), "https://bare.example.org/");
+    await fillTheSite(form, "bare", "https://bare.example.org/");
+    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
     await userEvent.click(form.getByRole("button", { name: "Add site" }));
 
     await waitFor(() => expect(created).toHaveLength(1));
@@ -215,6 +227,9 @@ describe("Sites", () => {
 
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByLabelText(/^Name/)).toHaveValue("example");
+
+    await userEvent.click(dialog.getByRole("button", { name: "Next" }));
+
     expect(dialog.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
   });
 
@@ -348,6 +363,7 @@ describe("the site form's examples", () => {
     await screen.findByText("example");
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "anything", "https://example.org/home");
 
     for (const label of [/Login page looks like/, /Page must contain/, /Page must not contain/]) {
       expect(form.getByLabelText(label)).toHaveAttribute(
@@ -362,7 +378,138 @@ describe("the site form's examples", () => {
     await screen.findByText("example");
     await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
     const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "anything", "https://example.org/home");
 
     expect(form.getByLabelText(/Page must not contain/)).toHaveAttribute("autocomplete", "off");
+  });
+});
+
+describe("the site form's two steps", () => {
+  it("asks what the site is before asking how to judge it", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.getByLabelText(/^Name/)).toBeInTheDocument();
+    expect(form.queryByLabelText(/Login page looks like/)).not.toBeInTheDocument();
+  });
+
+  it("goes back to the first step with what was typed still there", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "kept", "https://example.org/home");
+
+    await userEvent.click(form.getByRole("button", { name: "Back" }));
+
+    expect(form.getByLabelText(/^Name/)).toHaveValue("kept");
+  });
+
+  it("refuses to save a site that could not tell a dead session apart", async () => {
+    // Individually optional, collectively load-bearing: with none of them set a check reports
+    // only that the site answered. Saying so beats saving something that notices nothing.
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "unjudgeable", "https://example.org/home");
+
+    expect(form.getByRole("button", { name: "Add site" })).toBeDisabled();
+    expect(form.getByText(/could not tell a dead session/)).toBeInTheDocument();
+  });
+
+  it("allows it once a rule is given", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "judgeable", "https://example.org/home");
+
+    await userEvent.type(form.getByLabelText(/Page must contain/), "Log out");
+
+    expect(form.getByRole("button", { name: "Add site" })).toBeEnabled();
+  });
+
+  it("allows it when not detecting is chosen deliberately", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "unwatched", "https://example.org/home");
+
+    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
+
+    expect(form.getByRole("button", { name: "Add site" })).toBeEnabled();
+  });
+
+  it("cannot offer to work it out for a site with no session yet", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "new", "https://example.org/home");
+
+    expect(form.getByRole("radio", { name: /Work it out/ })).toBeDisabled();
+    expect(form.getByText(/Available once you have logged in/)).toBeInTheDocument();
+  });
+
+  it("fills the rules in from a comparison, and says what it found", async () => {
+    server.use(
+      // Every field differs from what the site already holds, so a rule that was not applied
+      // shows up as the old value rather than as a coincidence.
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            login_url_pattern: "stale.php",
+            success_pattern: "Stale text",
+            failure_pattern: "Stale failure",
+          }),
+        ]),
+      ),
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({
+          login_url_pattern: "login.php",
+          success_pattern: "Log out",
+          failure_pattern: null,
+          notes: ["Signed out, the request ends at https://example.org/login.php instead."],
+        }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+    await userEvent.click(form.getByRole("button", { name: "Next" }));
+
+    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
+    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+
+    expect(await form.findByText(/ends at https:\/\/example\.org\/login\.php/)).toBeInTheDocument();
+    // Every rule it found, not just one: each is applied by its own line, and a line that was
+    // dropped would leave that field holding whatever the site already had.
+    expect(form.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
+    expect(form.getByLabelText(/Page must contain/)).toHaveValue("Log out");
+    expect(form.getByLabelText(/Page must not contain/)).toHaveValue("");
+  });
+
+  it("reports a comparison that could not be made", async () => {
+    server.use(
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({ detail: "could not reach the site" }, { status: 502 }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+    await userEvent.click(form.getByRole("button", { name: "Next" }));
+
+    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
+    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+
+    expect(await form.findByRole("alert")).toHaveTextContent("could not reach the site");
   });
 });

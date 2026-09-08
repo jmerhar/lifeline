@@ -145,6 +145,42 @@ export function Toggle({
   );
 }
 
+export function Choice({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+  children,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <label className={`flex items-start gap-2.5 ${disabled ? "opacity-50" : "cursor-pointer"}`}>
+        <input
+          type="radio"
+          checked={checked}
+          onChange={onChange}
+          disabled={disabled}
+          className="mt-0.5 h-4 w-4 border-line accent-accent"
+        />
+        <span>
+          <span className="block text-small text-ink">{label}</span>
+          {hint ? <span className="block text-micro text-muted">{hint}</span> : null}
+        </span>
+      </label>
+      {/* Indented to the label's text, so what belongs to a choice reads as part of it. */}
+      {checked && children ? <div className="mt-3 ml-6.5">{children}</div> : null}
+    </div>
+  );
+}
+
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`rounded border border-line bg-surface ${className}`}>{children}</div>
