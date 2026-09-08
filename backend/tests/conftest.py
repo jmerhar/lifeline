@@ -386,6 +386,7 @@ def services(
     from lifeline.api.deps import Services
     from lifeline.api.security import LoginThrottle, SessionCookies
     from lifeline.services.browser.fetcher import BrowserFetcher
+    from lifeline.services.detect import Detector
     from lifeline.services.scheduler import Scheduler
 
     fetchers = {
@@ -404,6 +405,9 @@ def services(
         cookies=SessionCookies(settings.secret_key, timedelta(hours=1)),
         throttle=LoginThrottle(settings.login_rate_limit_per_minute),
         browser=browser,
+        # The real one: it makes ordinary HTTP requests, which respx intercepts, and a test
+        # asserting on what a comparison found should exercise the comparison.
+        detector=Detector(settings),
     )
 
 

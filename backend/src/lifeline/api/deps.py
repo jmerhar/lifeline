@@ -13,6 +13,7 @@ from ..config import Settings
 from ..models import User
 from ..services.browser.manager import BrowserManager
 from ..services.crypto import Cipher
+from ..services.detect import Detector
 from ..services.notifier import Notifier
 from ..services.runner import CheckRunner
 from ..services.scheduler import Scheduler
@@ -38,6 +39,7 @@ class Services:
     cookies: SessionCookies
     throttle: LoginThrottle
     browser: BrowserManager
+    detector: Detector
 
 
 def get_services(request: Request) -> Services:
@@ -136,6 +138,7 @@ def build_services(settings: Settings) -> Services:
         ),
         throttle=LoginThrottle(settings.login_rate_limit_per_minute),
         browser=browser,
+        detector=Detector(settings),
     )
 
 

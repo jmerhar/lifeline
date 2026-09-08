@@ -9,6 +9,7 @@ from ...models import CaptureMethod, Setting, Site, SiteStatus
 from ...schemas import (
     CheckRead,
     CookieImport,
+    DetectedRules,
     LoginSessionRead,
     Message,
     SessionRead,
@@ -184,6 +185,36 @@ async def check_now(site_id: int, db: DbDep, services: ServicesDep) -> CheckRead
     if check is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no such site")
     return CheckRead.model_validate(check)
+
+
+@router.post("/{site_id}/detect")
+async def detect(site_id: int, db: DbDep, services: ServicesDep) -> DetectedRules:
+    """Work out how to tell this site's live session from a dead one.
+
+    Fetches the ping URL twice, once with the stored session and once with no cookies, and
+    reports what differs. Needs a session, because half the comparison is what the page looks
+    like to somebody who is logged in.
+    """
+    site = await load_site(db, site_id)
+    if site.session is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="log in to this site first — there is nothing to compare a logged-out page to",
+        )
+    state = services.cipher.decrypt_json(site.session.state)
+    try:
+        found = await services.detector.detect(site, state)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"could not reach the site: {exc}",
+        ) from exc
+    return DetectedRules(
+        login_url_pattern=found.login_url_pattern,
+        success_pattern=found.success_pattern,
+        failure_pattern=found.failure_pattern,
+        notes=found.notes,
+    )
 
 
 @router.post("/{site_id}/session/import")

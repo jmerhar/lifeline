@@ -302,3 +302,67 @@ class TestRiskReason:
         body = (await logged_in.get(f"/api/sites/{created['id']}")).json()
 
         assert "the account lapses in" in body["risk"]
+
+
+class TestDetectingTheRules:
+    """Working out a site's detection rules from a signed-in and a signed-out fetch."""
+
+    async def give_it_a_session(self, db: AsyncSession, cipher, site_id: int) -> None:
+        """A stored session, so there is a signed-in side to compare against."""
+        site = await db.get(Site, site_id)
+        site.session = SiteSession(
+            state=cipher.encrypt_json(
+                {
+                    "cookies": [
+                        {"name": "session", "value": "v", "domain": "example.org", "path": "/"}
+                    ],
+                    "origins": [],
+                }
+            ),
+            captured_via=CaptureMethod.IMPORT,
+            captured_at=site.created_at,
+            cookie_names="session",
+        )
+        await db.commit()
+
+    async def test_reports_what_the_two_fetches_disagree_about(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        await self.give_it_a_session(db, cipher, created["id"])
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            if request.headers.get("cookie"):
+                return httpx.Response(200, text="<a>Log out</a>")
+            return httpx.Response(
+                200, text="<p>Remember me</p>", request=request
+            )
+
+        stub.get("https://example.org/home").mock(side_effect=answer)
+
+        body = (await logged_in.post(f"/api/sites/{created['id']}/detect")).json()
+
+        assert body["success_pattern"] == "Log out"
+        assert body["failure_pattern"] == "Remember me"
+        assert body["notes"]
+
+    async def test_refuses_without_a_session_to_compare_against(
+        self, logged_in: httpx.AsyncClient, created: dict
+    ) -> None:
+        # Half the comparison is what the page looks like to somebody logged in.
+        response = await logged_in.post(f"/api/sites/{created['id']}/detect")
+
+        assert response.status_code == 409
+        assert "log in to this site first" in response.json()["detail"]
+
+    async def test_reports_a_site_it_cannot_reach(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=httpx.ConnectError("refused"))
+
+        response = await logged_in.post(f"/api/sites/{created['id']}/detect")
+
+        assert response.status_code == 502
+
+    async def test_needs_a_login(self, client: httpx.AsyncClient, admin: User) -> None:
+        assert (await client.post("/api/sites/1/detect")).status_code == 401

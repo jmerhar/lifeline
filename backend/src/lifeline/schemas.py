@@ -180,6 +180,20 @@ class LoginSessionRead(BaseModel):
     expires_at: datetime
 
 
+class DetectedRules(BaseModel):
+    """What a signed-in and a signed-out fetch of the same page suggest.
+
+    Offered rather than applied: these are a starting point someone reads and corrects, and a
+    rule that silently appeared is a rule nobody knows is there.
+    """
+
+    login_url_pattern: str | None = None
+    success_pattern: str | None = None
+    failure_pattern: str | None = None
+    # One sentence per thing found, and one saying what to do when nothing was.
+    notes: list[str] = []
+
+
 class Message(BaseModel):
     """A plain result for actions that have nothing else to say."""
 
