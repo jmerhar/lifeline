@@ -81,6 +81,9 @@ export function SiteForm({
       setDetectError(null);
       setDraft((current) => ({
         ...current,
+        // Where a signed-out request landed is the login page, so it answers where to open a
+        // browser next time as well as what the page looks like.
+        login_url: rules.login_url ?? current.login_url,
         login_url_pattern: rules.login_url_pattern ?? null,
         success_pattern: rules.success_pattern ?? null,
         failure_pattern: rules.failure_pattern ?? null,
@@ -219,18 +222,6 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
           onChange={(event) => set("ping_url", event.target.value)}
           placeholder="e.g. https://example.org/home"
           required
-          {...notACredential}
-        />
-      </Field>
-      <Field
-        label="Login URL"
-        hint="Optional. Where the browser opens to log in — the ping URL is used if you leave it empty."
-      >
-        <Input
-          type="url"
-          value={draft.login_url ?? ""}
-          onChange={(event) => set("login_url", text(event.target.value))}
-          placeholder="e.g. https://example.org/login"
           {...notACredential}
         />
       </Field>
@@ -425,6 +416,18 @@ function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: T
 function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
+      <Field
+        label="Login URL"
+        hint="Optional. Where the browser opens to log in. The ping URL is used if it is empty, which is usually enough — a site with no session sends you to its login page."
+      >
+        <Input
+          type="url"
+          value={draft.login_url ?? ""}
+          onChange={(event) => set("login_url", text(event.target.value))}
+          placeholder="e.g. https://example.org/login"
+          {...notACredential}
+        />
+      </Field>
       <Field
         label="Login page looks like"
         hint="Text or a regex matched against the URL the request ends on."

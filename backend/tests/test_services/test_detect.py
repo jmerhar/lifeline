@@ -3,7 +3,7 @@
 import httpx
 import respx
 
-from lifeline.services.detect import Detector, Probe, compare
+from lifeline.services.detect import Detected, Detector, Probe, compare
 from tests.conftest import SAMPLE_STATE, make_site
 
 SIGNED_IN = "<html><body>Welcome back. <a href='/logout'>Log out</a></body></html>"
@@ -140,3 +140,31 @@ class TestFetching:
 
         assert result.final_url == "https://example.org/login.php"
 
+
+
+class TestTheLoginUrl:
+    """Where a signed-out request lands is the site's login page, by definition."""
+
+    def test_reports_where_a_signed_out_request_ended_up(self) -> None:
+        found = compare(probe(SIGNED_IN), probe(SIGNED_OUT, url="https://example.org/login.php"))
+
+        assert found.login_url == "https://example.org/login.php"
+
+    def test_drops_the_return_parameter(self) -> None:
+        # Kept, it would be stored as the place to open a browser for every future login,
+        # sending it back to one particular page for reasons nobody would remember.
+        found = compare(
+            probe(SIGNED_IN),
+            probe(SIGNED_OUT, url="https://example.org/login.php?return=%2Fhome#top"),
+        )
+
+        assert found.login_url == "https://example.org/login.php"
+
+    def test_reports_nothing_when_the_request_did_not_move(self) -> None:
+        assert compare(probe(SIGNED_IN), probe(SIGNED_OUT)).login_url is None
+
+    def test_is_not_on_its_own_a_way_to_judge_a_page(self) -> None:
+        # It says where to open a browser, not how to tell a live session from a dead one.
+        # Asserted on the value directly: a redirect always yields a pattern as well, so no pair
+        # of pages produces this state — the distinction is in what the property counts.
+        assert Detected(login_url="https://example.org/login").found_anything is False

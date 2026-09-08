@@ -187,6 +187,8 @@ class DetectedRules(BaseModel):
     rule that silently appeared is a rule nobody knows is there.
     """
 
+    # Where to open a browser for the next login, being where a request with no session landed.
+    login_url: str | None = None
     login_url_pattern: str | None = None
     success_pattern: str | None = None
     failure_pattern: str | None = None

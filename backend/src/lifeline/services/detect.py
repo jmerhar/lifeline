@@ -63,6 +63,8 @@ class Probe:
 class Detected:
     """The rules a pair of probes suggests, and what could not be worked out."""
 
+    # Where a request with no session ends up, which is the site's login page by definition.
+    login_url: str | None = None
     login_url_pattern: str | None = None
     success_pattern: str | None = None
     failure_pattern: str | None = None
@@ -71,7 +73,10 @@ class Detected:
 
     @property
     def found_anything(self) -> bool:
-        """Whether the pair produced a rule at all."""
+        """Whether the pair produced a rule at all.
+
+        The login URL is not counted: it says where to open a browser, not how to judge a page.
+        """
         return any((self.login_url_pattern, self.success_pattern, self.failure_pattern))
 
 
@@ -111,6 +116,7 @@ def compare(signed_in: Probe, signed_out: Probe) -> Detected:
     found = Detected()
 
     if signed_out.final_url != signed_in.final_url:
+        found.login_url = _without_query(signed_out.final_url)
         found.login_url_pattern = _distinctive_part(signed_out.final_url, signed_in.final_url)
         found.notes.append(
             f"Signed out, the request ends at {signed_out.final_url} instead of "
@@ -158,6 +164,17 @@ def _only_in(candidates: tuple[str, ...], present: str, absent: str) -> str | No
         if needle in lowered_present and needle not in lowered_absent:
             return candidate
     return None
+
+
+def _without_query(url: str) -> str:
+    """A URL with its query and fragment dropped.
+
+    The redirect to a login page usually carries where to return to afterwards
+    (``?return=%2Fhome``). Kept, that would be stored as the place to open a browser for every
+    future login, sending it back to one particular page for reasons nobody would remember.
+    """
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
 
 
 def _distinctive_part(landed: str, expected: str) -> str:

@@ -405,6 +405,17 @@ describe("the site form's examples", () => {
 });
 
 describe("adding a site", () => {
+  it("does not ask for a login URL nobody has seen the site to know", async () => {
+    // The ping URL reaches a login on its own: a site with no session sends you there.
+    render(<Sites />);
+    await screen.findByText("example");
+
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.queryByLabelText(/Login URL/)).not.toBeInTheDocument();
+  });
+
   it("asks only what the site is, and nothing it cannot answer yet", async () => {
     // The detection question needs a page seen both signed in and signed out. Asking it here
     // offered a disabled option and three fields nobody could fill.
@@ -603,6 +614,54 @@ describe("editing a site", () => {
     expect(form.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
     expect(form.getByLabelText(/Page must contain/)).toHaveValue("Log out");
     expect(form.getByLabelText(/Page must not contain/)).toHaveValue("");
+  });
+
+  it("fills in where to open the browser next time", async () => {
+    // A signed-out request lands on the login page, so the comparison answers this too.
+    server.use(
+      http.get("/api/sites", () => HttpResponse.json([makeSite({ login_url: null })])),
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({
+          login_url: "https://example.org/login.php",
+          login_url_pattern: "login.php",
+          success_pattern: null,
+          failure_pattern: null,
+          notes: [],
+        }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
+    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+
+    expect(await form.findByLabelText(/Login URL/)).toHaveValue("https://example.org/login.php");
+  });
+
+  it("keeps a login URL the comparison could not improve on", async () => {
+    // Nothing found means the request did not move, which is no reason to forget what is set.
+    server.use(
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({
+          login_url: null,
+          login_url_pattern: null,
+          success_pattern: "Log out",
+          failure_pattern: null,
+          notes: [],
+        }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
+    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+
+    await form.findByDisplayValue("Log out");
+    expect(form.getByLabelText(/Login URL/)).toHaveValue("https://example.org/login.php");
   });
 
   it("reports a comparison that could not be made", async () => {

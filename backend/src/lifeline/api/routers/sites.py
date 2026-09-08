@@ -207,6 +207,7 @@ async def detect(site_id: int, db: DbDep, services: ServicesDep) -> DetectedRule
             detail=f"could not reach the site: {exc}",
         ) from exc
     return DetectedRules(
+        login_url=found.login_url,
         login_url_pattern=found.login_url_pattern,
         success_pattern=found.success_pattern,
         failure_pattern=found.failure_pattern,
