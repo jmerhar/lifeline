@@ -380,7 +380,7 @@ function Detection({
           checked={approach === "manual"}
           onChange={() => onApproach("manual")}
           label="Set them myself"
-          hint="At least one. The first is the easiest to get right and catches nearly everything."
+          hint="At least one. The two page rules work everywhere; the URL one only on a site that redirects."
         >
           <Rules draft={draft} set={set} text={text} />
         </Choice>
@@ -500,7 +500,7 @@ function Trial({
 
 /** The form's own name for each rule, so the report and the field agree. */
 const RULE_LABELS: Record<RuleOutcome["rule"], string> = {
-  login_url_pattern: "Login page looks like",
+  login_url_pattern: "Ends up at a URL like",
   success_pattern: "Page must contain",
   failure_pattern: "Page must not contain",
 };
@@ -592,8 +592,8 @@ function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text
         />
       </Field>
       <Field
-        label="Login page looks like"
-        hint="Text or a regex matched against the URL the request ends on."
+        label="Ends up at a URL like"
+        hint="For a site that redirects a signed-out request to its login page. Matched against the URL the request finishes on, never against the page — so it does nothing on a site that serves its login form without redirecting."
       >
         <Input
           value={draft.login_url_pattern ?? ""}

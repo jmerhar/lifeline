@@ -231,7 +231,7 @@ describe("Sites", () => {
 
     await userEvent.click(dialog.getByRole("tab", { name: /Spotting a dead session/ }));
 
-    expect(dialog.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
+    expect(dialog.getByLabelText(/Ends up at a URL like/)).toHaveValue("login.php");
   });
 
   it("asks before deleting a site", async () => {
@@ -369,7 +369,7 @@ describe("the site form's examples", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    for (const label of [/Login page looks like/, /Page must contain/, /Page must not contain/]) {
+    for (const label of [/Ends up at a URL like/, /Page must contain/, /Page must not contain/]) {
       expect(form.getByLabelText(label)).toHaveAttribute(
         "placeholder",
         expect.stringMatching(/^e\.g\. /),
@@ -426,7 +426,7 @@ describe("adding a site", () => {
     const form = within(screen.getByRole("dialog"));
 
     expect(form.getByLabelText(/^Name/)).toBeInTheDocument();
-    expect(form.queryByLabelText(/Login page looks like/)).not.toBeInTheDocument();
+    expect(form.queryByLabelText(/Ends up at a URL like/)).not.toBeInTheDocument();
     expect(form.queryByRole("radio")).not.toBeInTheDocument();
   });
 
@@ -535,7 +535,7 @@ describe("editing a site", () => {
     render(<Sites />);
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
-    await userEvent.clear(form.getByLabelText(/Login page looks like/));
+    await userEvent.clear(form.getByLabelText(/Ends up at a URL like/));
 
     await userEvent.type(form.getByLabelText(/Page must contain/), "Log out");
 
@@ -636,7 +636,7 @@ describe("editing a site", () => {
     expect(await form.findByText(/ends at https:\/\/example\.org\/login\.php/)).toBeInTheDocument();
     // Every rule it found, not just one: each is applied by its own line, and a line that was
     // dropped would leave that field holding whatever the site already had.
-    expect(form.getByLabelText(/Login page looks like/)).toHaveValue("login.php");
+    expect(form.getByLabelText(/Ends up at a URL like/)).toHaveValue("login.php");
     expect(form.getByLabelText(/Page must contain/)).toHaveValue("Log out");
     expect(form.getByLabelText(/Page must not contain/)).toHaveValue("");
   });
