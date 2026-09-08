@@ -305,16 +305,21 @@ class TestAtRisk:
     async def test_a_lapsed_site_is_not_also_reported_as_at_risk(
         self,
         db: AsyncSession,
-        site: Site,
+        logged_in_site: Site,
         make_runner: Callable[..., CheckRunner],
         sender: RecordingSender,
     ) -> None:
         # It has already been reported as needing a login; a second message adds nothing.
-        site.inactivity_limit_days = 1
-        site.last_ok_at = NOW - timedelta(days=1)
+        # A site with a session, because one that never had a session says nothing at all.
+        logged_in_site.inactivity_limit_days = 1
+        logged_in_site.last_ok_at = NOW - timedelta(days=1)
+        logged_in_site.login_url_pattern = "login.php"
         await db.commit()
+        runner = make_runner(
+            make_fetch_result(final_url="https://example.org/login.php", state=None)
+        )
 
-        await make_runner().run(site.id, now=NOW)
+        await runner.run(logged_in_site.id, now=NOW)
 
         assert len(sender.sent) == 1
         assert "needs a new login" in sender.titles[0]
@@ -653,3 +658,44 @@ class TestExpiryWithoutRotation:
         stored = (await reload(db, logged_in_site)).session
         assert stored.state == original
         assert stored.rotated_at is None
+
+
+class TestASessionThatNeverExisted:
+    """Adding a site must not immediately report a login as lost."""
+
+    async def test_says_nothing_about_a_site_that_has_never_been_logged_into(
+        self, site: Site, make_runner: Callable[..., CheckRunner], sender: RecordingSender
+    ) -> None:
+        # A new site is due at once, so the scheduler checks it within the minute — while
+        # someone is still part-way through logging in.
+        await make_runner().run(site.id, now=NOW)
+
+        assert sender.sent == []
+
+    async def test_still_records_the_check(
+        self, db: AsyncSession, site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # Silent, not invisible: the history should still say the site has nothing to ping with.
+        check = await make_runner().run(site.id, now=NOW)
+
+        assert check.outcome is CheckOutcome.LOGIN_EXPIRED
+        assert (await reload(db, site)).status is SiteStatus.LAPSED
+
+    async def test_reports_a_captured_session_that_does_not_work(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        sender: RecordingSender,
+    ) -> None:
+        # The opposite case, which must keep working: a login was just captured and the first
+        # check with it fails. That is worth hearing about immediately.
+        logged_in_site.login_url_pattern = "login.php"
+        await db.commit()
+        runner = make_runner(
+            make_fetch_result(final_url="https://example.org/login.php", state=None)
+        )
+
+        await runner.run(logged_in_site.id, now=NOW)
+
+        assert len(sender.sent) == 1

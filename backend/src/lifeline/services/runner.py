@@ -243,7 +243,14 @@ class CheckRunner:
         )
 
         events: list[tuple[Event, str | None]] = []
-        if site.status in _LOGGED_OUT_STATUSES and previous not in _LOGGED_OUT_STATUSES:
+        if (
+            site.status in _LOGGED_OUT_STATUSES
+            and previous not in _LOGGED_OUT_STATUSES
+            # A session that was never captured cannot have lapsed. Otherwise adding a site
+            # sends "no session has been captured yet" within the minute, to someone who is at
+            # that moment part-way through logging in.
+            and site.session is not None
+        ):
             events.append((Event.LAPSED, report.verdict.detail))
         elif site.status is SiteStatus.ALIVE and previous in (SiteStatus.LAPSED, SiteStatus.ERROR):
             events.append((Event.RECOVERED, None))
