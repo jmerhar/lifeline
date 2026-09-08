@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 
 from lifeline.api.deps import build_services, cipher_secret
-from lifeline.services.crypto import load_or_create_secret
 from lifeline.config import Settings
 from lifeline.models import PingMethod
+from lifeline.services.crypto import load_or_create_secret
 
 
 class TestBuildServices:

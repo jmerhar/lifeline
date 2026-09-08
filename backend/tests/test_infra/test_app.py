@@ -4,12 +4,11 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from sqlalchemy.exc import OperationalError
 
 from lifeline.api.app import create_app, resolve_setup_token, setup_is_pending
-from lifeline.models import User
 from lifeline.config import SETUP_TOKEN_DISABLED, Settings
+from lifeline.models import User
 
 
 class TestSetupToken:

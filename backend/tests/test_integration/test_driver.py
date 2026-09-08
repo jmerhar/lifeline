@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from lifeline.services.browser.driver import PlaywrightDriver
 from lifeline.services.cookies import StorageState
 

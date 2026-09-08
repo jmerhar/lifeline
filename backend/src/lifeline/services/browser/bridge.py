@@ -7,6 +7,7 @@ fewer thing to supervise, and one fewer thing to leak.
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -68,8 +69,6 @@ async def pump(
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         writer.close()
-        try:
+        # The peer is already gone; there is nothing left to close cleanly.
+        with suppress(OSError):
             await writer.wait_closed()
-        except OSError:
-            # The peer is already gone; there is nothing left to close cleanly.
-            pass

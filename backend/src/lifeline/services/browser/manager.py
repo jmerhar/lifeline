@@ -5,9 +5,9 @@ import logging
 import secrets
 import socket
 from dataclasses import dataclass, field
-from typing import Protocol
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 
 from ...config import Settings
 from ..cookies import StorageState
@@ -277,7 +277,7 @@ class BrowserManager:
 
     async def fetch(
         self, url: str, state: StorageState, user_agent: str | None
-    ) -> "object":
+    ) -> object:
         """Load a page headlessly with a stored session, for a browser-mode ping."""
         if not self._settings.browser_enabled:
             raise BrowserUnavailable("browser checks are disabled in this deployment")

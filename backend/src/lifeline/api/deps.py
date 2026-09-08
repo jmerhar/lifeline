@@ -106,10 +106,10 @@ UserDep = Annotated[User | None, Depends(require_user)]
 def build_services(settings: Settings) -> Services:
     """Construct the whole object graph for a set of settings."""
     from ..db import create_engine, create_sessionmaker
-    from ..services.checker import HttpFetcher
-    from ..services.notifier import AppriseSender
     from ..models import PingMethod
     from ..services.browser.fetcher import BrowserFetcher
+    from ..services.checker import HttpFetcher
+    from ..services.notifier import AppriseSender
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     engine = create_engine(settings)

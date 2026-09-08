@@ -69,10 +69,10 @@ class Site(Base, TimestampMixin):
 
     notes: Mapped[str | None] = mapped_column(Text, default=None)
 
-    session: Mapped["SiteSession | None"] = relationship(
+    session: Mapped[SiteSession | None] = relationship(
         back_populates="site", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
-    checks: Mapped[list["Check"]] = relationship(
+    checks: Mapped[list[Check]] = relationship(
         back_populates="site", cascade="all, delete-orphan", passive_deletes=True
     )
 

@@ -8,9 +8,9 @@ migrated.
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import Connection
 
+from alembic import context
 from lifeline.config import get_settings
 from lifeline.db import create_engine
 from lifeline.models import Base, UtcDateTime
@@ -22,7 +22,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-def _render_item(obj_type: str, obj: object, autogen_context: object) -> str | bool:
+def _render_item(obj_type: str, obj: object, autogen_context: object) -> str | bool:  # noqa: ARG001
     """Render UtcDateTime as the plain DateTime it is built on.
 
     A migration is a standalone artefact that has to keep running years later; one that

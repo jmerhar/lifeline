@@ -7,16 +7,18 @@ test can see another's rows and none of them touch a developer's real database.
 import asyncio
 import tempfile
 from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from lifeline.config import Settings
 from lifeline.db import create_engine, create_sessionmaker
-from lifeline.models import (  # noqa: F401 - User is re-exported for fixture annotations
+from lifeline.models import (
     Base,
     CaptureMethod,
     PingMethod,
@@ -24,6 +26,7 @@ from lifeline.models import (  # noqa: F401 - User is re-exported for fixture an
     Site,
     SiteSession,
     SiteStatus,
+    User,
 )
 from lifeline.services.checker import FetchResult
 from lifeline.services.cookies import StorageState
@@ -243,7 +246,7 @@ def make_runner(
     settings: Settings,
     cipher: Cipher,
     notifier: Notifier,
-) -> "Callable[..., CheckRunner]":
+) -> Callable[..., CheckRunner]:
     """Build a runner whose fetcher returns the given results."""
 
     def build(*results: FetchResult | Exception) -> CheckRunner:
@@ -421,20 +424,17 @@ def app(services):
 
 
 @pytest.fixture
-async def client(app) -> AsyncIterator["httpx.AsyncClient"]:
+async def client(app) -> AsyncIterator[httpx.AsyncClient]:
     """An HTTP client speaking to the application in-process."""
-    import httpx
-
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://lifeline.test") as instance:
         yield instance
 
 
 @pytest.fixture
-async def admin(db: AsyncSession) -> "User":
+async def admin(db: AsyncSession) -> User:
     """An administrator, so the instance counts as set up."""
     from lifeline.api.security import hash_password
-    from lifeline.models import User
 
     user = User(username="jure", password_hash=hash_password("a-good-long-password"))
     db.add(user)
@@ -443,7 +443,7 @@ async def admin(db: AsyncSession) -> "User":
 
 
 @pytest.fixture
-async def logged_in(client, services, admin) -> "httpx.AsyncClient":
+async def logged_in(client, services, admin) -> httpx.AsyncClient:
     """A client carrying a valid session cookie."""
     client.cookies.set(
         services.settings.session_cookie_name, services.cookies.issue(admin.id)
@@ -471,7 +471,7 @@ class EchoServer:
         self._server: asyncio.Server | None = None
         self.port = 0
 
-    async def __aenter__(self) -> "EchoServer":
+    async def __aenter__(self) -> EchoServer:
         self._server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
         self.port = self._server.sockets[0].getsockname()[1]
         return self
@@ -479,11 +479,9 @@ class EchoServer:
     async def __aexit__(self, *_: object) -> None:
         for writer in self._writers:
             writer.close()
-            try:
+            # The peer is already gone; there is nothing left to close cleanly.
+            with suppress(OSError):
                 await writer.wait_closed()
-            except OSError:
-                # The peer is already gone; there is nothing left to close cleanly.
-                pass
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()

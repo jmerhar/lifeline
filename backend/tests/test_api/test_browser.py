@@ -139,7 +139,7 @@ class AsgiWebSocket:
         self.accepted = False
         self.close_message: dict | None = None
 
-    async def __aenter__(self) -> "AsgiWebSocket":
+    async def __aenter__(self) -> AsgiWebSocket:
         scope = {
             "type": "websocket",
             "asgi": {"version": "3.0", "spec_version": "2.3"},

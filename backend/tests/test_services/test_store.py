@@ -146,7 +146,9 @@ class TestCheckHistory:
 
     async def test_retention_of_zero_keeps_everything(self, db: AsyncSession, site: Site) -> None:
         # Zero reads as "no retention limit", not as "delete the entire history".
-        db.add(Check(site_id=site.id, started_at=NOW - timedelta(days=900), outcome=CheckOutcome.OK))
+        db.add(
+            Check(site_id=site.id, started_at=NOW - timedelta(days=900), outcome=CheckOutcome.OK)
+        )
         await db.commit()
 
         assert await prune_checks(db, retention_days=0, now=NOW) == 0

@@ -58,7 +58,7 @@ async def logout(response: Response, services: ServicesDep) -> Message:
 
 
 @router.get("/me")
-async def me(user: UserDep, services: ServicesDep) -> UserRead:
+async def me(user: UserDep) -> UserRead:
     """Who is logged in.
 
     With authentication disabled there is no user to describe, so a placeholder is returned

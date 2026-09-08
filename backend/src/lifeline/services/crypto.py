@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import secrets
-from pathlib import Path
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -70,7 +69,7 @@ class Cipher:
         self._fernet = Fernet(derive_fernet_key(secret))
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "Cipher":
+    def from_settings(cls, settings: Settings) -> Cipher:
         """Build a cipher from the configured or self-generated secret."""
         return cls(load_or_create_secret(settings))
 

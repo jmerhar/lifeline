@@ -15,6 +15,8 @@ run() {
 }
 
 run "shellcheck" shellcheck bin/*.sh
+run "backend lint" sh -c 'cd backend && .venv/bin/ruff check .'
+
 run "frontend types" sh -c 'cd frontend && npx tsc -b --force'
 run "frontend lint" sh -c 'cd frontend && npx eslint .'
 run "lockfile" bin/check-lockfile.sh

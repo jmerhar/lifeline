@@ -13,11 +13,11 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..config import Settings
+from ..models import SiteStatus
 from .checker import is_at_risk
 from .notifier import Event, Notifier
 from .runner import CheckRunner
 from .store import list_sites, load_settings_row, prune_checks
-from ..models import SiteStatus
 
 logger = logging.getLogger(__name__)
 
