@@ -100,3 +100,28 @@ class TestBrowserFetcher:
         result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
 
         assert len(result.body) == MAX_BODY_CHARS
+
+
+class TestExtensionArgs:
+    def test_names_the_directory_twice(self, data_dir) -> None:
+        # --load-extension adds this one; --disable-extensions-except stops Chromium loading
+        # anything else it finds in the profile.
+        from lifeline.services.browser.driver import extension_args
+
+        args = extension_args(data_dir)
+
+        assert args == [
+            f"--disable-extensions-except={data_dir}",
+            f"--load-extension={data_dir}",
+        ]
+
+    def test_asks_for_nothing_when_there_is_no_extension(self) -> None:
+        from lifeline.services.browser.driver import extension_args
+
+        assert extension_args(None) == []
+
+    def test_ignores_a_directory_that_is_not_there(self, data_dir) -> None:
+        # A login has to remain possible without it, so an absent directory is not fatal.
+        from lifeline.services.browser.driver import extension_args
+
+        assert extension_args(data_dir / "absent") == []

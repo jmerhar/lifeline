@@ -21,6 +21,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends xvfb x11vnc ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# The Bitwarden extension, loaded into the interactive-login browser so a password manager can fill
+# the form there. Pinned: an extension that updates itself underneath a login panel is a surprise
+# nobody wants, and this way the image is reproducible. Bump it deliberately.
+ARG BITWARDEN_VERSION=2026.8.0
+
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     # Outside any one user's home, so the browsers installed here as root stay readable to
@@ -28,6 +33,7 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
     DATA_DIR=/data \
     STATIC_DIR=/app/static \
+    BROWSER_EXTENSION_DIR=/opt/bitwarden \
     HOME=/home/app
 
 WORKDIR /app
@@ -42,6 +48,19 @@ RUN pip install . \
     && rm -rf "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-* \
               "$PLAYWRIGHT_BROWSERS_PATH"/ffmpeg-* \
     && rm -rf /var/lib/apt/lists/*
+
+# Unpacked, because that is the only form Chromium will load from the command line. Fetched at
+# build time rather than vendored: it is 22 MB of somebody else's release artefact.
+RUN set -eu; \
+    apt-get update && apt-get install -y --no-install-recommends unzip curl; \
+    curl -fsSL -o /tmp/bitwarden.zip \
+      "https://github.com/bitwarden/clients/releases/download/browser-v${BITWARDEN_VERSION}/dist-chrome-${BITWARDEN_VERSION}.zip"; \
+    mkdir -p /opt/bitwarden; \
+    unzip -q /tmp/bitwarden.zip -d /opt/bitwarden; \
+    test -f /opt/bitwarden/manifest.json; \
+    rm -f /tmp/bitwarden.zip; \
+    apt-get purge -y --auto-remove unzip curl; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic

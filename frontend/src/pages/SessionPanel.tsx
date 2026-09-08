@@ -11,8 +11,8 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { LoginSession, Site } from "../api/types";
 import { Modal } from "../components/Modal";
-import { VncScreen } from "../components/VncScreen";
-import { Button, Field, Problem, TextArea } from "../components/ui";
+import { VncScreen, type VncHandle } from "../components/VncScreen";
+import { Button, Field, Input, Problem, TextArea } from "../components/ui";
 
 type Tab = "browser" | "paste";
 
@@ -84,6 +84,7 @@ function BrowserTab({
   onSaved: () => void;
 }) {
   const [session, setSession] = useState<LoginSession | null>(null);
+  const [handle, setHandle] = useState<VncHandle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -133,15 +134,19 @@ function BrowserTab({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-small text-muted">
-        Log in as you normally would, then save the session. Two-factor prompts and bot checks
-        all work here — it is a real browser.
+        Log in as you normally would, then save the session. Two-factor prompts and bot checks all
+        work here — it is a real browser.
       </p>
       {error ? <Problem>{error}</Problem> : null}
       {session ? (
-        <VncScreen
-          path={session.ws_path}
-          className="aspect-[16/10] w-full overflow-hidden rounded border border-line"
-        />
+        <>
+          <VncScreen
+            path={session.ws_path}
+            onReady={setHandle}
+            className="aspect-[16/10] w-full overflow-hidden rounded border border-line"
+          />
+          <PasteBar handle={handle} />
+        </>
       ) : (
         <div className="flex aspect-[16/10] w-full items-center justify-center rounded border border-line bg-canvas text-small text-muted">
           {error ? "Nothing to show." : "Starting a browser…"}
@@ -156,6 +161,60 @@ function BrowserTab({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Getting a password into the remote browser.
+ *
+ * The browser in the panel is a different machine's browser, so a password manager on this one
+ * cannot fill it and an ordinary paste does not cross the gap. Pasting into this field does cross
+ * it: the text goes onto the remote clipboard and is then pasted into whatever has focus there.
+ *
+ * The field is used rather than reading the clipboard directly because reading it needs a
+ * permission prompt, while pasting *into* a field is something every browser already allows.
+ */
+function PasteBar({ handle }: { handle: VncHandle | null }) {
+  const [text, setText] = useState("");
+  const [sent, setSent] = useState(false);
+
+  function send(event: React.FormEvent) {
+    event.preventDefault();
+    if (!handle || !text) return;
+    handle.paste(text);
+    // Not kept a moment longer than it takes to send.
+    setText("");
+    setSent(true);
+  }
+
+  return (
+    <form onSubmit={send} className="flex items-end gap-2">
+      <div className="flex-1">
+        <Field
+          label="Send to the browser"
+          hint="Click the field in the browser above, then paste your password here and send it."
+        >
+          <Input
+            type="password"
+            value={text}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+              setText(event.target.value);
+              setSent(false);
+            }}
+            placeholder="Paste here"
+            autoComplete="off"
+          />
+        </Field>
+      </div>
+      <Button type="submit" disabled={!handle || !text}>
+        Send
+      </Button>
+      {sent ? (
+        <span role="status" className="pb-2 text-micro text-alive">
+          Sent
+        </span>
+      ) : null}
+    </form>
   );
 }
 

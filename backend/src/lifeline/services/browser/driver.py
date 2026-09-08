@@ -35,6 +35,20 @@ LAUNCH_ARGS = [
 ]
 
 
+def extension_args(extension_dir: Path | None) -> list[str]:
+    """The flags that load an unpacked extension, or none at all.
+
+    Both flags are needed: --load-extension adds this one, and --disable-extensions-except stops
+    Chromium loading anything else it finds in the profile. A directory that is not there is
+    ignored rather than fatal — the extension is a convenience, and a login must still be possible
+    without it.
+    """
+    if extension_dir is None or not extension_dir.is_dir():
+        return []
+    path = str(extension_dir)
+    return [f"--disable-extensions-except={path}", f"--load-extension={path}"]
+
+
 class InteractiveBrowser(Protocol):
     """A browser a person is driving through the VNC stream."""
 
@@ -56,7 +70,7 @@ class Driver(Protocol):
     """Opens browsers, headful for a login and headless for a ping."""
 
     async def open_interactive(
-        self, profile_dir: Path, display: str, url: str
+        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
     ) -> InteractiveBrowser: ...
 
     async def fetch(
@@ -127,13 +141,14 @@ class PlaywrightDriver:
     """Drives Chromium through Playwright."""
 
     async def open_interactive(
-        self, profile_dir: Path, display: str, url: str
+        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
     ) -> InteractiveBrowser:
         """Open a headful browser on ``display``, at ``url``.
 
         A persistent context rather than a fresh one so that a partly finished login — a
         device-trust cookie, a half-completed two-factor enrolment — survives closing the
-        panel and coming back to it.
+        panel and coming back to it. It is also what makes an extension loadable at all:
+        Chromium only accepts one for a context with a profile on disk.
         """
         from playwright.async_api import async_playwright
 
@@ -143,7 +158,7 @@ class PlaywrightDriver:
             context = await playwright.chromium.launch_persistent_context(
                 str(profile_dir),
                 headless=False,
-                args=LAUNCH_ARGS,
+                args=[*LAUNCH_ARGS, *extension_args(extension_dir)],
                 viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
                 # The whole environment is passed, not just DISPLAY: Playwright replaces the
                 # browser's environment with whatever is given here, and a Chromium started

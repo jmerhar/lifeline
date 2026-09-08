@@ -3,6 +3,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SessionPanel } from "./SessionPanel";
@@ -13,8 +14,24 @@ import { server } from "../test/server";
 // noVNC opens a real websocket and paints a canvas, neither of which exists here. The screen
 // component is stubbed so these tests are about the panel's own behaviour: starting a
 // session, saving it, and shutting it down when the panel closes.
+const pastedToRemote: string[] = [];
+
 vi.mock("../components/VncScreen", () => ({
-  VncScreen: ({ path }: { path: string }) => <div data-testid="vnc-screen" data-path={path} />,
+  VncScreen: ({
+    path,
+    onReady,
+  }: {
+    path: string;
+    onReady?: (handle: { paste: (text: string) => void }) => void;
+  }) => {
+    // In an effect, exactly as the real component does it. Calling it during render hands the
+    // parent a new object on every pass, so its setState re-renders this, which calls it again —
+    // an infinite loop that hangs the test run rather than failing it.
+    useEffect(() => {
+      onReady?.({ paste: (text: string) => pastedToRemote.push(text) });
+    }, [onReady]);
+    return <div data-testid="vnc-screen" data-path={path} />;
+  },
 }));
 
 const site = makeSite();
@@ -26,6 +43,10 @@ const opened = {
   height: 800,
   expires_at: "2026-09-06T13:00:00Z",
 };
+
+beforeEach(() => {
+  pastedToRemote.length = 0;
+});
 
 describe("SessionPanel", () => {
   beforeEach(() => {
@@ -160,5 +181,51 @@ describe("SessionPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save session" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("not a name=value pair");
+  });
+});
+
+describe("sending a password to the remote browser", () => {
+  beforeEach(() => {
+    server.use(
+      http.post("/api/sites/1/login-session", () => HttpResponse.json(opened)),
+      http.delete("/api/browser/token-abc", () => HttpResponse.json({ detail: "closed" })),
+    );
+  });
+
+  it("offers a field for it", async () => {
+    // A password manager on this machine cannot fill a browser running on another one, and an
+    // ordinary paste does not cross that gap.
+    render(<SessionPanel site={site} onClose={() => {}} onSaved={() => {}} />);
+
+    expect(await screen.findByLabelText("Send to the browser")).toBeInTheDocument();
+  });
+
+  it("masks what is typed there", async () => {
+    render(<SessionPanel site={site} onClose={() => {}} onSaved={() => {}} />);
+
+    expect(await screen.findByLabelText("Send to the browser")).toHaveAttribute(
+      "type",
+      "password",
+    );
+  });
+
+  it("sends it to the browser and keeps nothing", async () => {
+    render(<SessionPanel site={site} onClose={() => {}} onSaved={() => {}} />);
+    const field = await screen.findByLabelText("Send to the browser");
+
+    await userEvent.type(field, "a-difficult-password");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(pastedToRemote).toEqual(["a-difficult-password"]);
+    // Cleared, so it is not left sitting in the page after it has been sent.
+    expect(field).toHaveValue("");
+    expect(await screen.findByRole("status")).toHaveTextContent("Sent");
+  });
+
+  it("will not send nothing", async () => {
+    render(<SessionPanel site={site} onClose={() => {}} onSaved={() => {}} />);
+    await screen.findByLabelText("Send to the browser");
+
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 });

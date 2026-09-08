@@ -322,15 +322,17 @@ class FakeDriver:
     """A driver that hands out FakeBrowsers instead of launching Chromium."""
 
     def __init__(self, *, fail: bool = False) -> None:
-        self.opened: list[tuple[Path, str, str]] = []
+        self.opened: list[tuple[Path, str, str, Path | None]] = []
         self.fetched: list[str] = []
         self.browser = FakeBrowser()
         self.fail = fail
 
-    async def open_interactive(self, profile_dir: Path, display: str, url: str) -> FakeBrowser:
+    async def open_interactive(
+        self, profile_dir: Path, display: str, url: str, extension_dir: Path | None = None
+    ) -> FakeBrowser:
         if self.fail:
             raise RuntimeError("the browser would not start")
-        self.opened.append((profile_dir, display, url))
+        self.opened.append((profile_dir, display, url, extension_dir))
         return self.browser
 
     async def fetch(

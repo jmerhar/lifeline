@@ -176,7 +176,9 @@ class BrowserManager:
                         marker=f"-rfbport {rfb_port}",
                     )
                 )
-                browser = await self._driver.open_interactive(profile_dir, display, url)
+                browser = await self._driver.open_interactive(
+                    profile_dir, display, url, self._settings.browser_extension_dir
+                )
             except BaseException:
                 # A half-started session must not be left holding a display or a port.
                 for process in processes:

@@ -335,3 +335,25 @@ class TestBrowserFetch:
 
         assert result.status_code == 200
         assert fake_driver.fetched == ["https://example.org/home"]
+
+
+class TestExtension:
+    async def test_loads_the_extension_it_is_configured_with(
+        self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
+    ) -> None:
+        # The browser in the panel runs on another machine, so the password manager on this one
+        # cannot fill its forms. One installed inside it can.
+        settings.browser_extension_dir = settings.data_dir
+
+        await build(settings, fake_driver, fake_processes).open_login(1, LOGIN_URL, IDLE)
+
+        assert fake_driver.opened[0][3] == settings.data_dir
+
+    async def test_opens_without_one_when_none_is_configured(
+        self, settings: Settings, fake_driver: FakeDriver, fake_processes: FakeProcesses
+    ) -> None:
+        settings.browser_extension_dir = None
+
+        await build(settings, fake_driver, fake_processes).open_login(1, LOGIN_URL, IDLE)
+
+        assert fake_driver.opened[0][3] is None

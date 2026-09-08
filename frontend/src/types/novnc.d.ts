@@ -22,5 +22,9 @@ declare module "@novnc/novnc" {
     clipViewport: boolean;
     viewOnly: boolean;
     disconnect(): void;
+    /** Put text on the remote clipboard. */
+    clipboardPasteFrom(text: string): void;
+    /** Press or release one key on the remote, by X keysym. */
+    sendKey(keysym: number, code: string, down?: boolean): void;
   }
 }

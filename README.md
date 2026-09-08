@@ -27,6 +27,10 @@ anything. There is a [light theme](docs/screenshot-light.png) too.</sub>
   a real browser and you are the one driving it.
 - **Or takes cookies you already have.** Paste a `Cookie:` header, a JSON export from a
   cookie extension, or a `cookies.txt` file, and skip the browser entirely.
+- **Works with your password manager.** The browser in the panel is running on the server, so the
+  extension in *your* browser cannot fill its forms. Two things make that bearable: Bitwarden ships
+  inside the image and is loaded into that browser, so it can fill them; and a field under the panel
+  sends text across, for when you would rather paste a password than type it.
 - **Pings on a schedule.** One authenticated request per site per interval — seven days by
   default — with the User-Agent the session was captured with, jittered so a site is never
   asked at the same time forever.
@@ -72,6 +76,7 @@ Every setting has a working default; `.env.example` lists them. The ones worth k
 | `SECRET_KEY` | generated into `./data` | Encrypts the stored sessions. **Losing it means logging into every site again.** |
 | `AUTH_DISABLED` | `false` | Skips lifeline's own login, for an instance already behind someone else's authentication. |
 | `LIFELINE_UID` / `LIFELINE_GID` | `1000` | The user the container runs as. It must own `./data`. |
+| `BROWSER_EXTENSION_DIR` | `/opt/bitwarden` | An unpacked extension loaded into the login browser. Set it empty to load none, or point it at a directory you mount yourself. |
 
 Anything holding a secret also accepts a `*_FILE` variant naming a file to read it from, for
 a deployment that would rather mount secrets than pass them in the environment.
@@ -101,6 +106,21 @@ Then set **"site disables an account after"** if the site has such a rule, and l
 count down to it and warn you in advance.
 
 Adding the same site twice, under two names, tracks two accounts on it independently.
+
+### Passwords, and the browser being somewhere else
+
+The login browser runs on the server, which is why your own password manager cannot reach it. So:
+
+- **Bitwarden is in the image** and loaded into that browser. Unlock it there once per site — the
+  profile is kept, so a PIN is enough afterwards — and it fills forms as it does anywhere else. To
+  load a different extension, or none, set `BROWSER_EXTENSION_DIR`.
+- **Or send a password across.** Paste it into the field under the panel and press Send: it goes
+  onto the browser's clipboard and is pasted into whichever field has focus there. The field is
+  masked and cleared as soon as it is sent.
+
+A hardware key or a passkey cannot work through the panel — the browser is not on your machine, so
+it cannot reach the key, and WebAuthn is bound to the origin either way. For a site that needs one,
+log in on your own machine and use **Paste cookies**. One-time codes work fine in the panel.
 
 ### When a plain request is not enough
 

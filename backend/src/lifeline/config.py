@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     scheduler_tick_seconds: int = 60
 
     browser_enabled: bool = True
+    # An unpacked browser extension to load into the interactive-login browser. The image ships
+    # Bitwarden here, so a password manager can fill the form in the panel — the browser is on
+    # another machine, so the one on yours cannot. Point it elsewhere to load a different
+    # extension, or set it empty to load none.
+    browser_extension_dir: Path | None = None
     # X display numbers are allocated from here upwards, one per live login session.
     display_base: int = 99
 
@@ -77,7 +82,13 @@ class Settings(BaseSettings):
         ``Path(".")`` — which is a real directory, so the application would try to serve its
         own working directory as the built interface and fail at startup.
         """
-        for field in ("static_dir", "secret_key", "setup_token", "database_url"):
+        for field in (
+            "static_dir",
+            "secret_key",
+            "setup_token",
+            "database_url",
+            "browser_extension_dir",
+        ):
             value = getattr(self, field)
             if value is not None and str(value).strip() in ("", "."):
                 object.__setattr__(self, field, None)
