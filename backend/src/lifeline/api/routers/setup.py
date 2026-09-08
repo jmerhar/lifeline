@@ -6,9 +6,9 @@ from sqlalchemy import func, select
 from ...models import User
 from ...schemas import SetupRequest, SetupState, UserRead
 from ...services.store import load_settings_row
+from ..deps import DbDep, ServicesDep
 from ..security import PasswordTooShort, hash_password
 from ..session import issue_session_cookie
-from ..deps import DbDep, ServicesDep
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
@@ -18,7 +18,7 @@ async def _user_count(db: DbDep) -> int:
 
 
 @router.get("")
-async def state(db: DbDep, services: ServicesDep, request: Request) -> SetupState:
+async def state(db: DbDep, request: Request) -> SetupState:
     """Whether this instance still needs an administrator."""
     return SetupState(
         setup_required=await _user_count(db) == 0,
@@ -46,6 +46,14 @@ async def complete(
         )
 
     expected = request.app.state.setup_token
+    if expected is None and not services.settings.setup_token_disabled:
+        # No token was minted because there was an administrator when the process started, and
+        # there is none now. Whatever emptied the user table — a restore, an edit outside the
+        # application — must not leave the wizard open to whoever asks first.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="restart lifeline to set it up again; it will print a new setup token",
+        )
     if expected is not None and payload.token != expected:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

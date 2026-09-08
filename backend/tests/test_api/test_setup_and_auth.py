@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lifeline.api.deps import SETUP_REQUIRED_DETAIL
+from lifeline.config import SETUP_TOKEN_DISABLED
 from lifeline.models import Setting, User
 
 GOOD_PASSWORD = "a-good-long-password"
@@ -37,6 +38,20 @@ class TestSetupState:
         app.state.setup_token = None
 
         assert (await client.get("/api/setup")).json()["token_required"] is False
+
+    async def test_refuses_setup_when_the_guard_went_missing(
+        self, client: httpx.AsyncClient, app
+    ) -> None:
+        # No token was minted because there was an administrator at boot, and now there is none:
+        # something emptied the user table, and the wizard must not be claimable by whoever asks.
+        app.state.setup_token = None
+
+        response = await client.post(
+            "/api/setup", json={"username": "someone", "password": "a-long-enough-password"}
+        )
+
+        assert response.status_code == 403
+        assert "restart" in response.json()["detail"]
 
 
 class TestSetupCompletion:
@@ -89,8 +104,11 @@ class TestSetupCompletion:
         assert response.status_code == 403
 
     async def test_accepts_no_token_when_the_guard_is_off(
-        self, client: httpx.AsyncClient, app
+        self, client: httpx.AsyncClient, app, services
     ) -> None:
+        # Both halves of the real configuration: nothing was minted *because* the guard is off.
+        # Blanking the token alone would instead look like a wizard that lost its guard.
+        services.settings.setup_token = SETUP_TOKEN_DISABLED
         app.state.setup_token = None
 
         response = await client.post(

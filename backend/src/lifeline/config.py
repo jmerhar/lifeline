@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     static_dir: Path | None = None
 
     @model_validator(mode="after")
-    def _blank_means_unset(self) -> "Settings":
+    def _blank_means_unset(self) -> Settings:
         """Treat an empty value as absent.
 
         Compose writes ``VAR: ${VAR:-}`` for an optional setting, so an unset variable arrives
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _read_secret_files(self) -> "Settings":
+    def _read_secret_files(self) -> Settings:
         """Fill any unset setting whose ``*_FILE`` companion names a readable file.
 
         An explicit value wins over a file, so a deployment can override one field of a
@@ -112,6 +112,11 @@ class Settings(BaseSettings):
                 continue
             object.__setattr__(self, target, path.read_text().strip())
         return self
+
+    @property
+    def setup_token_disabled(self) -> bool:
+        """Whether the first-run wizard has deliberately been left unguarded."""
+        return self.setup_token == SETUP_TOKEN_DISABLED
 
     @property
     def resolved_database_url(self) -> str:

@@ -13,7 +13,8 @@ from .. import __version__
 from ..config import SETUP_TOKEN_DISABLED, Settings, get_settings
 from ..services import logs
 from .deps import build_services
-from .routers import auth, browser, checks, health, settings as settings_router, setup, sites
+from .routers import auth, browser, checks, health, setup, sites
+from .routers import settings as settings_router
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def resolve_setup_token(settings: Settings) -> str | None:
     persisted: a restart before setup is a fine moment to mint a new one, and after setup it
     is never needed again.
     """
-    if settings.setup_token == SETUP_TOKEN_DISABLED:
+    if settings.setup_token_disabled:
         return None
     return settings.setup_token or secrets.token_urlsafe(9)
 
