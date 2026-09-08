@@ -111,7 +111,7 @@ class CheckRunner:
             else:
                 report = await perform_check(site, state, self._fetcher_for(site))
 
-            check = self._record(session, site, report, now)
+            check = self._record(session, site, report, now, state)
             events = self._apply(site, report, settings_row, now)
             await session.commit()
 
@@ -136,9 +136,18 @@ class CheckRunner:
         return check
 
     def _record(
-        self, session: AsyncSession, site: Site, report: CheckReport, now: datetime
+        self,
+        session: AsyncSession,
+        site: Site,
+        report: CheckReport,
+        now: datetime,
+        state: StorageState | None,
     ) -> Check:
-        """Write the check row and fold a rotated session back into storage."""
+        """Write the check row and fold a rotated session back into storage.
+
+        ``state`` is what was stored before the ping, already decrypted for it, so nothing here
+        has to read the session a second time.
+        """
         check = Check(
             site_id=site.id,
             started_at=now,
@@ -160,13 +169,16 @@ class CheckRunner:
                 ",".join(cookie_names(kept)),
                 site.session.expires_at,
             )
+        elif site.session is not None and state is not None:
+            # Nothing was reissued, so there is nothing to re-encrypt — but the expiry still has
+            # to be right, since it is one of the two clocks that decide whether this site gets
+            # warned about. A site that never rotates its cookies would otherwise keep whatever
+            # was computed the day it was captured, or nothing at all.
+            site.session.expires_at = expires_at(state)
         return check
 
     def _save_state(self, site: Site, stored: SiteSession, state: StorageState) -> StorageState:
         """Persist a session, scoped to the hosts the site involves, and return what was stored.
-
-        Returned rather than kept to itself because the scoping happens here: a caller that
-        logged the state it passed in would report cookies that were dropped on the way.
 
         A browser used for a login picks up cookies from everything it touched, so this is where
         the ones belonging elsewhere are dropped — on every write rather than only on capture,

@@ -623,3 +623,33 @@ class TestScopedToTheSite:
         )
 
         assert (await reload(db, site)).session.rotated_at is None
+
+
+class TestExpiryWithoutRotation:
+    """A site that never reissues its cookies still has an expiry that has to be right."""
+
+    async def test_a_successful_check_fills_in_a_missing_expiry(
+        self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # Nothing rotates, so nothing is re-encrypted — but the column is what decides whether
+        # the site is warned about, and it must not stay empty for the life of the session.
+        logged_in_site.session.expires_at = None
+        await db.commit()
+
+        await make_runner(make_fetch_result(rotated=False)).run(logged_in_site.id, now=NOW)
+
+        stored = (await reload(db, logged_in_site)).session
+        assert stored.expires_at == datetime(2100, 1, 1, tzinfo=UTC)
+
+    async def test_leaves_the_session_itself_untouched(
+        self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # Reading it to compute an expiry is not a reason to rewrite it, which would claim a
+        # rotation that never happened.
+        original = logged_in_site.session.state
+
+        await make_runner(make_fetch_result(rotated=False)).run(logged_in_site.id, now=NOW)
+
+        stored = (await reload(db, logged_in_site)).session
+        assert stored.state == original
+        assert stored.rotated_at is None
