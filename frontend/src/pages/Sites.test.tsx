@@ -19,6 +19,30 @@ describe("Sites", () => {
     expect(screen.getByText("alive")).toBeInTheDocument();
   });
 
+  it("says why a site needs attention", async () => {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            status: "at_risk",
+            risk: "the account lapses in 4 day(s), before the next check on 16 Sep 2026",
+          }),
+        ]),
+      ),
+    );
+
+    render(<Sites />);
+
+    expect(await screen.findByText(/the account lapses in 4 day\(s\)/)).toBeInTheDocument();
+  });
+
+  it("does not invent a reason for a healthy site", async () => {
+    render(<Sites />);
+
+    await screen.findByText("example");
+    expect(screen.queryByText(/before the next check/)).not.toBeInTheDocument();
+  });
+
   it("summarises the sites above the table", async () => {
     server.use(
       http.get("/api/sites", () =>

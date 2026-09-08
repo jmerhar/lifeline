@@ -486,8 +486,8 @@ export interface components {
             captured_via: components["schemas"]["CaptureMethod"];
             /** Cookie Names */
             cookie_names: string[];
-            /** Earliest Expiry */
-            earliest_expiry: string | null;
+            /** Expires At */
+            expires_at: string | null;
             /** Rotated At */
             rotated_at: string | null;
         };
@@ -719,6 +719,8 @@ export interface components {
             ping_url: string;
             /** Pulse */
             pulse?: components["schemas"]["CheckOutcome"][];
+            /** Risk */
+            risk?: string | null;
             session?: components["schemas"]["SessionRead"] | null;
             status: components["schemas"]["SiteStatus"];
             /** Success Pattern */

@@ -60,7 +60,7 @@ class SessionRead(BaseModel):
     captured_at: datetime
     captured_via: CaptureMethod
     rotated_at: datetime | None
-    earliest_expiry: datetime | None
+    expires_at: datetime | None
     cookie_names: list[str]
 
 
@@ -91,6 +91,9 @@ class SiteRead(SiteWrite):
     next_check_at: datetime | None
     # When the account lapses if nothing succeeds first, derived from the last success.
     deadline_at: datetime | None
+    # Why the site needs attention, when it does. A status on its own leaves someone looking at
+    # "due soon" with no way to find out what is due.
+    risk: str | None = None
     session: SessionRead | None = None
     # The outcomes of the most recent checks, oldest first, for the pulse strip.
     pulse: list[CheckOutcome] = Field(default_factory=list)

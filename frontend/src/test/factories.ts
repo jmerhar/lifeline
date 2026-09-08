@@ -31,7 +31,7 @@ export function makeSite(overrides: Partial<Site> = {}): Site {
       captured_at: "2026-09-01T09:00:00Z",
       captured_via: "browser",
       rotated_at: "2026-09-06T10:00:00Z",
-      earliest_expiry: "2027-01-01T00:00:00Z",
+      expires_at: "2027-01-01T00:00:00Z",
       cookie_names: ["session", "uid"],
     },
     pulse: ["ok", "ok", "ok"],

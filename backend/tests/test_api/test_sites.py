@@ -1,5 +1,7 @@
 """Managing sites over HTTP."""
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from sqlalchemy import select
@@ -252,3 +254,36 @@ class TestHistory:
 
     async def test_reports_a_missing_site(self, logged_in: httpx.AsyncClient) -> None:
         assert (await logged_in.get("/api/sites/404/checks")).status_code == 404
+
+
+class TestRiskReason:
+    """A status word alone leaves someone reading "due soon" with nothing to act on."""
+
+    async def run_out_of_time(self, db: AsyncSession, site_id: int) -> None:
+        """Put a site two days from its inactivity deadline, with no check due before then."""
+        site = await db.get(Site, site_id)
+        assert site is not None
+        site.last_ok_at = datetime.now(UTC) - timedelta(days=88)
+        site.next_check_at = datetime.now(UTC) + timedelta(days=30)
+        await db.commit()
+
+    async def test_says_why_a_site_needs_attention(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        await self.run_out_of_time(db, created["id"])
+
+        body = (await logged_in.get("/api/sites")).json()
+
+        assert "the account lapses in" in body[0]["risk"]
+
+    async def test_stays_quiet_about_a_healthy_site(self, created: dict) -> None:
+        assert created["risk"] is None
+
+    async def test_answers_for_one_site_too(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        await self.run_out_of_time(db, created["id"])
+
+        body = (await logged_in.get(f"/api/sites/{created['id']}")).json()
+
+        assert "the account lapses in" in body["risk"]

@@ -3,7 +3,7 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from ...models import CaptureMethod, Site
 from ...schemas import (
@@ -18,6 +18,7 @@ from ...schemas import (
 from ...services import favicon
 from ...services.browser.driver import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from ...services.browser.manager import BrowserUnavailable
+from ...services.checker import is_at_risk
 from ...services.cookies import CookieParseError, parse_import
 from ...services.store import (
     get_site,
@@ -40,7 +41,7 @@ PULSE_LENGTH = 12
 HISTORY_LENGTH = 50
 
 
-def to_read(site: Site, pulse: list[str] | None = None) -> SiteRead:
+def to_read(site: Site, pulse: list[str] | None = None, risk: str | None = None) -> SiteRead:
     """Render a site for the API, with its derived fields."""
     stored = site.session
     session = None
@@ -49,7 +50,7 @@ def to_read(site: Site, pulse: list[str] | None = None) -> SiteRead:
             captured_at=stored.captured_at,
             captured_via=stored.captured_via,
             rotated_at=stored.rotated_at,
-            earliest_expiry=stored.earliest_expiry,
+            expires_at=stored.expires_at,
             cookie_names=[name for name in stored.cookie_names.split(",") if name],
         )
     return SiteRead(
@@ -78,6 +79,7 @@ def to_read(site: Site, pulse: list[str] | None = None) -> SiteRead:
         deadline_at=site.deadline_at,
         session=session,
         pulse=pulse or [],
+        risk=risk,
     )
 
 
@@ -93,7 +95,12 @@ async def index(db: DbDep) -> list[SiteRead]:
     """Every site, with the recent history the list displays."""
     sites = await list_sites(db)
     pulse = await pulse_for_sites(db, PULSE_LENGTH)
-    return [to_read(site, pulse.get(site.id, [])) for site in sites]
+    row = await load_settings_row(db)
+    now = datetime.now(UTC)
+    return [
+        to_read(site, pulse.get(site.id, []), risk=is_at_risk(site, row, now=now))
+        for site in sites
+    ]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -119,7 +126,10 @@ async def show(site_id: int, db: DbDep) -> SiteRead:
     """One site."""
     site = await load_site(db, site_id)
     pulse = await pulse_for_sites(db, PULSE_LENGTH)
-    return to_read(site, pulse.get(site.id, []))
+    row = await load_settings_row(db)
+    return to_read(
+        site, pulse.get(site.id, []), risk=is_at_risk(site, row, now=datetime.now(UTC))
+    )
 
 
 @router.put("/{site_id}")

@@ -187,6 +187,11 @@ function SiteRow({
         </td>
         <td className="px-3 py-2">
           <StatusBadge status={site.status} />
+          {/* A status word on its own leaves someone reading "due soon" with no way to find out
+              what is due, so the reason travels with it. */}
+          {site.risk ? (
+            <span className="mt-0.5 block max-w-[22rem] text-micro text-muted">{site.risk}</span>
+          ) : null}
         </td>
         <td className="px-3 py-2">
           {/* The schema marks pulse optional because the field has a default, so it is
@@ -228,8 +233,8 @@ function SiteRow({
                     )} (${site.session.captured_via})`
                   : "none — log in to capture one"}
               </Detail>
-              <Detail label="Cookies expire">
-                {site.session ? timestamp(site.session.earliest_expiry) : "—"}
+              <Detail label="Everything expires">
+                {site.session ? timestamp(site.session.expires_at) : "—"}
               </Detail>
               <Detail label="Checked every">
                 {site.interval_days} {site.interval_days === 1 ? "day" : "days"}

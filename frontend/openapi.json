@@ -234,7 +234,7 @@
             "title": "Cookie Names",
             "type": "array"
           },
-          "earliest_expiry": {
+          "expires_at": {
             "anyOf": [
               {
                 "format": "date-time",
@@ -244,7 +244,7 @@
                 "type": "null"
               }
             ],
-            "title": "Earliest Expiry"
+            "title": "Expires At"
           },
           "rotated_at": {
             "anyOf": [
@@ -263,7 +263,7 @@
           "captured_at",
           "captured_via",
           "rotated_at",
-          "earliest_expiry",
+          "expires_at",
           "cookie_names"
         ],
         "title": "SessionRead",
@@ -684,6 +684,17 @@
             },
             "title": "Pulse",
             "type": "array"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk"
           },
           "session": {
             "anyOf": [
