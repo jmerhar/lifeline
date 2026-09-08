@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lifeline.models import CaptureMethod, Site, SiteSession, SiteStatus, User
+from lifeline.models import CaptureMethod, PingMethod, Site, SiteSession, SiteStatus, User
 
 NEW_SITE = {
     "name": "example",
@@ -366,3 +366,18 @@ class TestDetectingTheRules:
 
     async def test_needs_a_login(self, client: httpx.AsyncClient, admin: User) -> None:
         assert (await client.post("/api/sites/1/detect")).status_code == 401
+
+    async def test_reports_a_deployment_that_cannot_render(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, services
+    ) -> None:
+        # A browser-mode site is compared through a browser, so a deployment without one cannot
+        # answer for it — and must say so rather than failing as an internal error.
+        await self.give_it_a_session(db, cipher, created["id"])
+        site = await db.get(Site, created["id"])
+        site.ping_method = PingMethod.BROWSER
+        await db.commit()
+        services.settings.browser_enabled = False
+
+        response = await logged_in.post(f"/api/sites/{created['id']}/detect")
+
+        assert response.status_code == 503

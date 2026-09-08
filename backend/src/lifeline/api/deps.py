@@ -138,7 +138,7 @@ def build_services(settings: Settings) -> Services:
         ),
         throttle=LoginThrottle(settings.login_rate_limit_per_minute),
         browser=browser,
-        detector=Detector(settings),
+        detector=Detector(settings, browser),
     )
 
 

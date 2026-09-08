@@ -355,7 +355,13 @@ class FakeDriver:
         class Result:
             status_code = 200
             final_url = url
-            body = "<html>Logged in as jure</html>"
+            # Differs by whether a session was supplied, the way a page built in the browser
+            # does: its server sends the same markup either way and the JavaScript decides.
+            body = (
+                "<html>Logged in as jure. Log out</html>"
+                if state["cookies"]
+                else "<html>Please Sign in. Remember me</html>"
+            )
 
         result = Result()
         result.state = state
@@ -416,7 +422,7 @@ def services(
         browser=browser,
         # The real one: it makes ordinary HTTP requests, which respx intercepts, and a test
         # asserting on what a comparison found should exercise the comparison.
-        detector=Detector(settings),
+        detector=Detector(settings, browser),
     )
 
 

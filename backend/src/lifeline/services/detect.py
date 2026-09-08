@@ -20,9 +20,13 @@ from urllib.parse import urlsplit
 import httpx
 
 from ..config import Settings
-from ..models import Site
+from ..models import PingMethod, Site
+from .browser.manager import BrowserManager, BrowserUnavailable
 from .checker import MAX_BODY_CHARS
-from .cookies import StorageState, state_to_jar
+from .cookies import StorageState, empty_state, state_to_jar
+
+# A session with nothing in it, for the signed-out half of the comparison.
+EMPTY_STATE: StorageState = empty_state()
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +87,20 @@ class Detected:
 class Detector:
     """Fetches a site's ping URL signed in and signed out, and compares the two."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, browser: BrowserManager | None = None) -> None:
         self._settings = settings
+        self._browser = browser
 
     async def probe(self, site: Site, state: StorageState | None) -> Probe:
-        """Fetch the ping URL once, with the given cookies or with none."""
+        """Fetch the ping URL once, with the given cookies or with none.
+
+        Fetched the way the site will actually be checked. A site that builds its page in the
+        browser serves the same markup signed in or out — the difference appears only once the
+        JavaScript has run — so comparing plain responses for one of those reports, correctly and
+        uselessly, that the two are identical.
+        """
+        if site.ping_method is PingMethod.BROWSER:
+            return await self._probe_rendered(site, state)
         headers = {"User-Agent": site.user_agent or self._settings.default_user_agent}
         async with httpx.AsyncClient(
             cookies=state_to_jar(state) if state is not None else None,
@@ -102,6 +115,19 @@ class Detector:
             status_code=response.status_code,
             final_url=str(response.url),
             body=response.text[:MAX_BODY_CHARS],
+        )
+
+    async def _probe_rendered(self, site: Site, state: StorageState | None) -> Probe:
+        """Load the page in a browser and report the document its JavaScript produced."""
+        if self._browser is None:
+            raise BrowserUnavailable("this deployment cannot render pages in a browser")
+        result = await self._browser.fetch(
+            site.ping_url, state or EMPTY_STATE, site.user_agent
+        )
+        return Probe(
+            status_code=result.status_code,
+            final_url=result.final_url,
+            body=result.body[:MAX_BODY_CHARS],
         )
 
     async def detect(self, site: Site, state: StorageState) -> Detected:

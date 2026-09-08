@@ -201,6 +201,12 @@ async def detect(site_id: int, db: DbDep, services: ServicesDep) -> DetectedRule
     state = services.cipher.decrypt_json(site.session.state)
     try:
         found = await services.detector.detect(site, state)
+    except BrowserUnavailable as exc:
+        # A site set to be checked through a browser is compared through one too, so a
+        # deployment without one cannot answer for it at all.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

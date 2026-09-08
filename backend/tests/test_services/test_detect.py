@@ -1,8 +1,11 @@
 """Working out a site's rules by fetching it signed in and signed out."""
 
 import httpx
+import pytest
 import respx
 
+from lifeline.models import PingMethod
+from lifeline.services.browser.manager import BrowserUnavailable
 from lifeline.services.detect import Detected, Detector, Probe, compare
 from tests.conftest import SAMPLE_STATE, make_site
 
@@ -168,3 +171,56 @@ class TestTheLoginUrl:
         # Asserted on the value directly: a redirect always yields a pattern as well, so no pair
         # of pages produces this state — the distinction is in what the property counts.
         assert Detected(login_url="https://example.org/login").found_anything is False
+
+
+class TestABrowserRenderedSite:
+    """A site that builds its page in the browser has to be compared the same way.
+
+    Its server sends the same markup signed in or out — the difference appears only once the
+    JavaScript has run — so comparing plain responses reports, correctly and uselessly, that the
+    two are identical.
+    """
+
+    @respx.mock
+    async def test_finds_a_difference_a_plain_response_would_not_show(
+        self, settings, browser, fake_driver
+    ) -> None:
+        # The server's own answer is the same either way — an empty shell — so a comparison that
+        # read it would report "the page looks the same" and leave nothing to check with.
+        shell = "<html><div id='app'></div></html>"
+        respx.get("https://example.org/home").mock(return_value=httpx.Response(200, text=shell))
+        site = make_site(ping_method=PingMethod.BROWSER)
+
+        found = await Detector(settings, browser).detect(site, SAMPLE_STATE)
+
+        assert fake_driver.fetched == ["https://example.org/home"] * 2
+        assert found.success_pattern == "Log out"
+        assert found.failure_pattern == "Remember me"
+
+    @respx.mock
+    async def test_a_plain_comparison_of_the_same_site_finds_nothing(
+        self, settings, browser
+    ) -> None:
+        # The other half of the point: left as an HTTP site, this is what the person saw.
+        shell = "<html><div id='app'></div></html>"
+        respx.get("https://example.org/home").mock(return_value=httpx.Response(200, text=shell))
+
+        found = await Detector(settings, browser).detect(make_site(), SAMPLE_STATE)
+
+        assert found.found_anything is False
+
+    async def test_asks_the_browser_twice_with_and_without_the_session(
+        self, settings, browser, fake_driver
+    ) -> None:
+        await Detector(settings, browser).probe(
+            make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE
+        )
+        await Detector(settings, browser).probe(make_site(ping_method=PingMethod.BROWSER), None)
+
+        assert len(fake_driver.fetched) == 2
+
+    async def test_says_so_when_the_deployment_cannot_render(self, settings) -> None:
+        # A detector with no browser behind it must not silently fall back to a plain fetch,
+        # which is what made the comparison useless for this kind of site.
+        with pytest.raises(BrowserUnavailable):
+            await Detector(settings).probe(make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE)
