@@ -141,7 +141,8 @@ class CheckRunner:
         session.add(check)
 
         if report.rotated and report.state is not None and site.session is not None:
-            self._save_state(site.session, report.state, now)
+            self._save_state(site, site.session, report.state, now)
+            site.session.rotated_at = now
             # Names only. The values are what the session is, and a log file is not where they go.
             logger.debug(
                 "  %s: stored the reissued session; cookies %s, expiring %s",
@@ -151,9 +152,26 @@ class CheckRunner:
             )
         return check
 
-    def _save_state(self, stored: SiteSession, state: StorageState, now: datetime) -> None:
+    def _save_state(
+        self, site: Site, stored: SiteSession, state: StorageState, now: datetime
+    ) -> None:
+        """Persist a session, scoped to the site it belongs to.
+
+        A browser used for a login picks up cookies from everything it touched, so this is where
+        the ones belonging elsewhere are dropped — on every write rather than only on capture,
+        so a session that already holds them is cleaned by the next check instead of needing a
+        fresh login.
+        """
+        host = urlsplit(site.ping_url).hostname or ""
+        dropped = foreign_domains(state, host)
+        if dropped:
+            logger.info(
+                "%s: not storing cookies for %s — they belong to another site",
+                site.name,
+                ", ".join(dropped),
+            )
+        state = for_host(state, host)
         stored.state = self._cipher.encrypt_json(state)
-        stored.rotated_at = now
         stored.expires_at = expires_at(state)
         stored.cookie_names = ",".join(cookie_names(state))
 
@@ -246,25 +264,11 @@ class CheckRunner:
             site = await get_site(session, site_id)
             if site is None:
                 raise LookupError(f"no site with id {site_id}")
-            # A browser used for a login picks up cookies from everything it touched; only the ones
-            # belonging to this site are kept. They are the only ones a ping would ever send, and
-            # holding somebody else's session encrypted in this database is not something to do by
-            # accident.
-            host = urlsplit(site.ping_url).hostname or ""
-            dropped = foreign_domains(state, host)
-            if dropped:
-                logger.info(
-                    "%s: not storing cookies for %s — they belong to another site",
-                    site.name,
-                    ", ".join(dropped),
-                )
-            state = for_host(state, host)
-
             stored = site.session or SiteSession(site_id=site_id, captured_at=now, state=b"")
             stored.captured_via = captured_via
             stored.captured_at = now
             stored.rotated_at = None
-            self._save_state(stored, state, now)
+            self._save_state(site, stored, state, now)
             if user_agent:
                 site.user_agent = user_agent
             site.session = stored

@@ -440,7 +440,7 @@ class TestStoreSession:
         await runner.run(logged_in_site.id, now=NOW)
         assert len(sender.sent) == 1
 
-        await runner.store_session(logged_in_site.id, ROTATED_STATE, CaptureMethod.BROWSER, now=NOW)
+        await make_runner().store_session(logged_in_site.id, ROTATED_STATE, CaptureMethod.BROWSER, now=NOW)
         await runner.run(logged_in_site.id, now=NOW)
 
         assert len(sender.sent) == 2
@@ -576,3 +576,48 @@ class TestLogging:
             )
 
         assert any("stored a session for example" in message for message in caplog.messages)
+
+
+class TestScopedToTheSite:
+    """Cookies from elsewhere are dropped on every write, not only on capture."""
+
+    def state_with_a_stranger(self) -> dict:
+        return {
+            "cookies": [
+                {"name": "session", "value": "s", "domain": ".example.org", "path": "/"},
+                {"name": "_gh_sess", "value": "g", "domain": "github.com", "path": "/"},
+            ],
+            "origins": [],
+        }
+
+    async def test_a_capture_keeps_only_the_sites_own_cookies(
+        self, db: AsyncSession, site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        await make_runner().store_session(
+            site.id, self.state_with_a_stranger(), CaptureMethod.BROWSER, now=NOW
+        )
+
+        stored = (await reload(db, site)).session
+        assert stored.cookie_names == "session"
+
+    async def test_a_write_back_cleans_a_session_that_already_held_them(
+        self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # A session captured before the scoping rule existed heals on its next check rather than
+        # needing a fresh login.
+        runner = make_runner(make_fetch_result(state=self.state_with_a_stranger(), rotated=True))
+
+        await runner.run(logged_in_site.id, now=NOW)
+
+        stored = (await reload(db, logged_in_site)).session
+        assert stored.cookie_names == "session"
+
+    async def test_a_fresh_capture_has_not_rotated(
+        self, db: AsyncSession, site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # Nothing has reissued it yet, so the interface must not claim otherwise.
+        await make_runner().store_session(
+            site.id, self.state_with_a_stranger(), CaptureMethod.BROWSER, now=NOW
+        )
+
+        assert (await reload(db, site)).session.rotated_at is None
