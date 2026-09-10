@@ -12,7 +12,7 @@
  */
 
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import {
@@ -27,7 +27,6 @@ import {
 import { Modal } from "../components/Modal";
 import {
   Button,
-  Choice,
   Field,
   Input,
   notACredential,
@@ -37,8 +36,14 @@ import {
   Toggle,
 } from "../components/ui";
 
-/** How the detection rules are being arrived at. */
-export type Approach = "detect" | "manual" | "none";
+/**
+ * Whether this site is watched for a dead session at all.
+ *
+ * Not how its rules were arrived at. Filling them in by hand and having the comparison fill them
+ * in leave the identical form behind, so offering that as a choice asked a question with no
+ * consequence — and let someone switch between two states that differed in nothing.
+ */
+export type Watching = "yes" | "no";
 
 /** The panels an existing site's settings are divided into. */
 export type Tab = "site" | "detection" | "advanced";
@@ -53,7 +58,7 @@ export function SiteForm({
   site,
   defaultIntervalDays,
   initialTab = "site",
-  initialApproach,
+  compareOnOpen = false,
   onCancel,
   onSave,
   error,
@@ -63,8 +68,13 @@ export function SiteForm({
   defaultIntervalDays: number;
   /** Which panel to open on. The login flow lands on detection, having just made it answerable. */
   initialTab?: Tab;
-  /** Overrides what the site's own settings imply — the login flow asks for the comparison. */
-  initialApproach?: Approach;
+  /**
+   * Run the comparison as the panel opens.
+   *
+   * Asked for by the login flow: someone who has just logged in has nothing to add by hand, and
+   * everything the comparison needs now exists.
+   */
+  compareOnOpen?: boolean;
   onCancel: () => void;
   onSave: (payload: SiteWrite) => void;
   error?: string | null;
@@ -74,9 +84,7 @@ export function SiteForm({
     site ? toWrite(site) : { ...emptySite, interval_days: defaultIntervalDays },
   );
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [approach, setApproach] = useState<Approach>(
-    () => initialApproach ?? approachFor(site),
-  );
+  const [watching, setWatching] = useState<Watching>(() => watchingFor(site));
   const [found, setFound] = useState<DetectedRules | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [trialError, setTrialError] = useState<string | null>(null);
@@ -87,6 +95,27 @@ export function SiteForm({
   // Empty text inputs are sent as null rather than "": the API treats an absent pattern as
   // "do not check this", and an empty string would be a pattern that matches everything.
   const text = (value: string) => (value.trim() === "" ? null : value);
+
+  const detect = useMutation({
+    mutationFn: () => api.detectRules(site!.id),
+    onSuccess: (rules) => {
+      setFound(rules);
+      setDetectError(null);
+      setDraft((current) => ({
+        ...current,
+        // Where a signed-out request landed is the login page, and what a check consults follows
+        // from that on its own — there is no pattern to fill in alongside it.
+        login_url: rules.login_url ?? current.login_url,
+        success_pattern: rules.success_pattern ?? null,
+        failure_pattern: rules.failure_pattern ?? null,
+      }));
+      // Something was found, so this site is being watched — whatever the checkbox said before
+      // there was anything to watch with.
+      if (rules.login_url || rules.success_pattern || rules.failure_pattern) setWatching("yes");
+    },
+    onError: (cause) =>
+      setDetectError(cause instanceof ApiError ? cause.message : "The site could not be compared."),
+  });
 
   const tryOut = useMutation({
     mutationFn: () =>
@@ -102,38 +131,28 @@ export function SiteForm({
     onMutate: () => setTrialError(null),
   });
 
-  const detect = useMutation({
-    mutationFn: () => api.detectRules(site!.id),
-    onSuccess: (rules) => {
-      setFound(rules);
-      setDetectError(null);
-      setDraft((current) => ({
-        ...current,
-        // Where a signed-out request landed is the login page, so it answers where to open a
-        // browser next time as well as what the page looks like.
-        login_url: rules.login_url ?? current.login_url,
-        login_url_pattern: rules.login_url_pattern ?? null,
-        success_pattern: rules.success_pattern ?? null,
-        failure_pattern: rules.failure_pattern ?? null,
-      }));
-    },
-    onError: (cause) =>
-      setDetectError(cause instanceof ApiError ? cause.message : "The site could not be compared."),
-  });
-
   const isNew = site === null;
   const hasSession = site?.session != null;
-  const ruleCount = [draft.login_url_pattern, draft.success_pattern, draft.failure_pattern].filter(
-    Boolean,
-  ).length;
-  // Choosing to detect and then setting nothing leaves a site configured to notice nothing while
-  // looking configured. Choosing not to detect is a real answer and is never blocked. Neither
-  // applies while adding, where the question has not been asked yet.
-  const blocked = !isNew && approach !== "none" && ruleCount === 0;
+
+  // Fired once. A dependency list including the mutation would run it again on every render that
+  // changed its identity, which is a browser fetch per keystroke.
+  const compared = useRef(false);
+  useEffect(() => {
+    if (compareOnOpen && hasSession && !compared.current) {
+      compared.current = true;
+      detect.mutate();
+    }
+  }, [compareOnOpen, hasSession, detect]);
+
+  const signals = countSignals(draft);
+  // Watching a site and giving it nothing to watch with leaves it configured to notice nothing
+  // while looking configured. Choosing not to watch it is a real answer and is never blocked,
+  // and neither applies while adding, where the question has not been asked yet.
+  const blocked = !isNew && watching === "yes" && signals === 0;
 
   const submit = () =>
     onSave(
-      approach === "none"
+      watching === "no"
         ? { ...draft, login_url_pattern: null, success_pattern: null, failure_pattern: null }
         : draft,
     );
@@ -152,7 +171,7 @@ export function SiteForm({
             type="submit"
             form="site-form"
             disabled={busy || blocked}
-            title={blocked ? "Give it a rule, or choose not to detect a dead session" : undefined}
+            title={blocked ? "Give it something to check, or turn detection off" : undefined}
           >
             {busy ? "Saving…" : isNew ? "Add site and log in" : "Save changes"}
           </Button>
@@ -172,8 +191,8 @@ export function SiteForm({
         {isNew ? (
           <>
             <p className="text-small text-muted">
-              What the site is. Saving opens a browser so you can log in — after that lifeline can
-              work out how to tell a live session from a dead one by itself.
+              What the site is. Saving opens a browser so you can log in — after that lifeline works
+              out how to tell a live session from a dead one by itself.
             </p>
             <TheSite draft={draft} set={set} text={text} />
           </>
@@ -186,14 +205,14 @@ export function SiteForm({
                 draft={draft}
                 set={set}
                 text={text}
-                approach={approach}
-                onApproach={setApproach}
+                watching={watching}
+                onWatching={setWatching}
                 hasSession={hasSession}
                 found={found}
                 detecting={detect.isPending}
                 onDetect={() => detect.mutate()}
                 detectError={detectError}
-                ruleCount={ruleCount}
+                signals={signals}
                 trial={tryOut.data ?? null}
                 trialError={trialError}
                 trying={tryOut.isPending}
@@ -311,14 +330,14 @@ function Detection({
   draft,
   set,
   text,
-  approach,
-  onApproach,
+  watching,
+  onWatching,
   hasSession,
   found,
   detecting,
   onDetect,
   detectError,
-  ruleCount,
+  signals,
   trial,
   trialError,
   trying,
@@ -327,14 +346,14 @@ function Detection({
   draft: SiteWrite;
   set: Setter;
   text: Text;
-  approach: Approach;
-  onApproach: (value: Approach) => void;
+  watching: Watching;
+  onWatching: (value: Watching) => void;
   hasSession: boolean;
   found: DetectedRules | null;
   detecting: boolean;
   onDetect: () => void;
   detectError: string | null;
-  ruleCount: number;
+  signals: number;
   trial: RuleTrialResult | null;
   trialError: string | null;
   trying: boolean;
@@ -342,109 +361,101 @@ function Detection({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <fieldset className="flex flex-col gap-4">
-        <p className="text-small text-muted">
-          A check can always tell you the site answered. To know whether you are still{" "}
-          <em>logged in</em>, it needs one thing that differs between a signed-in page and a
-          signed-out one.
-        </p>
+      <p className="text-small text-muted">
+        A check can always tell you the site answered. To know whether you are still{" "}
+        <em>logged in</em>, it needs one thing that differs between a signed-in page and a
+        signed-out one.
+      </p>
 
-        <Choice
-          checked={approach === "detect"}
-          onChange={() => onApproach("detect")}
-          disabled={!hasSession}
-          label="Work it out from my login"
-          hint={
-            hasSession
-              ? "Fetches the page twice, signed in and signed out, and fills these in from the difference."
-              : "Log in to this site first — there is nothing to compare a signed-out page against."
-          }
-        >
-          <div className="flex flex-col gap-3">
-            <div>
-              <Button type="button" onClick={onDetect} disabled={detecting}>
-                {detecting ? "Comparing…" : found ? "Compare again" : "Compare the two"}
-              </Button>
-            </div>
-            {detectError ? <Problem>{detectError}</Problem> : null}
-            {found ? (
-              <ul className="flex flex-col gap-1 text-micro text-muted">
-                {found.notes?.map((note) => <li key={note}>{note}</li>)}
-              </ul>
-            ) : null}
-            {found ? <Rules draft={draft} set={set} text={text} /> : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" onClick={onDetect} disabled={detecting || !hasSession}>
+          {detecting ? "Comparing…" : found ? "Compare again" : "Work it out from my login"}
+        </Button>
+        <span className="text-micro text-muted">
+          {hasSession
+            ? "Fetches the page signed in and signed out, and fills in what differs."
+            : "Log in to this site first — there is nothing to compare a signed-out page against."}
+        </span>
+      </div>
+
+      {detectError ? <Problem>{detectError}</Problem> : null}
+      {found ? (
+        <ul className="flex flex-col gap-1 text-micro text-muted">
+          {found.notes?.map((note) => <li key={note}>{note}</li>)}
+        </ul>
+      ) : null}
+
+      {watching === "yes" ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Page must contain" hint="Something only a logged-in page shows.">
+              <Input
+                value={draft.success_pattern ?? ""}
+                onChange={(event) => set("success_pattern", text(event.target.value))}
+                placeholder="e.g. Log out"
+                {...notACredential}
+              />
+            </Field>
+            <Field label="Page must not contain" hint="Something only a logged-out page shows.">
+              <Input
+                value={draft.failure_pattern ?? ""}
+                onChange={(event) => set("failure_pattern", text(event.target.value))}
+                // Names no password: a placeholder mentioning one gets the field classified as a
+                // credential, which makes a password manager both fill it in and offer to save a
+                // login for the whole form. "Remember me" belongs to a login page just as well.
+                placeholder="e.g. Remember me"
+                {...notACredential}
+              />
+            </Field>
           </div>
-        </Choice>
 
-        <Choice
-          checked={approach === "manual"}
-          onChange={() => onApproach("manual")}
-          label="Set them myself"
-          hint="At least one. The two page rules work everywhere; the URL one only on a site that redirects."
-        >
-          <Rules draft={draft} set={set} text={text} />
-        </Choice>
+          {draft.login_url ? (
+            <p className="text-micro text-muted">
+              A signed-out request is also expected to end up at{" "}
+              <span className="font-mono">{draft.login_url}</span>, which counts on its own. Change
+              it under Advanced.
+            </p>
+          ) : null}
 
-        <Choice
-          checked={approach === "none"}
-          onChange={() => onApproach("none")}
-          label="Don't detect a dead session"
-          hint="Keeps pinging the site on schedule, but says nothing when the login stops working."
-        />
+          {signals === 0 ? (
+            <p className="text-small text-risk">
+              Nothing is set yet, so a check could not tell a dead session from a live one.
+            </p>
+          ) : null}
 
-        {approach !== "none" && ruleCount === 0 ? (
-          <p className="text-small text-risk">
-            Nothing is set yet, so a check could not tell a dead session from a live one.
-          </p>
-        ) : null}
-
-        {approach !== "none" ? (
           <Trial
             hasSession={hasSession}
-            ruleCount={ruleCount}
+            signals={signals}
             busy={trying}
             result={trial}
             error={trialError}
             onRun={onTry}
           />
-        ) : null}
-      </fieldset>
+        </>
+      ) : null}
 
-      <fieldset className="flex flex-col gap-4 border-t border-line pt-4">
-        <legend className="sr-only">What counts as a good response</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Expected status" hint="The HTTP status a good response has.">
-            <Input
-              type="number"
-              min={100}
-              max={599}
-              value={draft.expected_status}
-              onChange={(event) => set("expected_status", Number(event.target.value))}
-              required
-            />
-          </Field>
-        </div>
+      <div className="border-t border-line pt-4">
         <Toggle
-          checked={draft.follow_redirects}
-          onChange={(value) => set("follow_redirects", value)}
-          label="Follow redirects"
-          hint="Off if the site answers with a redirect when the session is fine."
+          checked={watching === "no"}
+          onChange={(off) => onWatching(off ? "no" : "yes")}
+          label="Don't detect a dead session"
+          hint="Keeps pinging the site on schedule, but says nothing when the login stops working."
         />
-      </fieldset>
+      </div>
     </div>
   );
 }
 
 function Trial({
   hasSession,
-  ruleCount,
+  signals,
   busy,
   result,
   error,
   onRun,
 }: {
   hasSession: boolean;
-  ruleCount: number;
+  signals: number;
   busy: boolean;
   result: RuleTrialResult | null;
   error: string | null;
@@ -453,7 +464,7 @@ function Trial({
   return (
     <div className="flex flex-col gap-3 border-t border-line pt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={onRun} disabled={busy || !hasSession || ruleCount === 0}>
+        <Button type="button" onClick={onRun} disabled={busy || !hasSession || signals === 0}>
           {busy ? "Trying…" : "Try these rules"}
         </Button>
         <span className="text-micro text-muted">
@@ -500,7 +511,7 @@ function Trial({
 
 /** The form's own name for each rule, so the report and the field agree. */
 const RULE_LABELS: Record<RuleOutcome["rule"], string> = {
-  login_url_pattern: "Ends up at a URL like",
+  login_url_pattern: "Ends up at the login page",
   success_pattern: "Page must contain",
   failure_pattern: "Page must not contain",
 };
@@ -551,6 +562,39 @@ function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: T
   return (
     <fieldset className="grid gap-4 sm:grid-cols-2">
       <Field
+        label="Login URL"
+        hint="Where the browser opens to log in, and — when it differs from the ping URL — what a check treats as landing on the login page. Filled in by the comparison; the ping URL is used if it is empty."
+      >
+        <Input
+          type="url"
+          value={draft.login_url ?? ""}
+          onChange={(event) => set("login_url", text(event.target.value))}
+          placeholder="e.g. https://example.org/login"
+          {...notACredential}
+        />
+      </Field>
+      <Field
+        label="Ends up at a URL like"
+        hint="Only for a site that sends a signed-out request somewhere other than the page you log in on. Empty means the login URL above is used."
+      >
+        <Input
+          value={draft.login_url_pattern ?? ""}
+          onChange={(event) => set("login_url_pattern", text(event.target.value))}
+          placeholder="e.g. session-expired"
+          {...notACredential}
+        />
+      </Field>
+      <Field label="Expected status" hint="The HTTP status a good response has.">
+        <Input
+          type="number"
+          min={100}
+          max={599}
+          value={draft.expected_status}
+          onChange={(event) => set("expected_status", Number(event.target.value))}
+          required
+        />
+      </Field>
+      <Field
         label="Spread checks by"
         hint="Percent, so a site is not asked at the same time forever."
       >
@@ -572,72 +616,49 @@ function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: T
           {...notACredential}
         />
       </Field>
+      <div className="sm:col-span-2">
+        <Toggle
+          checked={draft.follow_redirects}
+          onChange={(value) => set("follow_redirects", value)}
+          label="Follow redirects"
+          hint="Off if the site answers with a redirect when the session is fine."
+        />
+      </div>
     </fieldset>
   );
 }
 
-function Rules({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Field
-        label="Login URL"
-        hint="Optional. Where the browser opens to log in. The ping URL is used if it is empty, which is usually enough — a site with no session sends you to its login page."
-      >
-        <Input
-          type="url"
-          value={draft.login_url ?? ""}
-          onChange={(event) => set("login_url", text(event.target.value))}
-          placeholder="e.g. https://example.org/login"
-          {...notACredential}
-        />
-      </Field>
-      <Field
-        label="Ends up at a URL like"
-        hint="For a site that redirects a signed-out request to its login page. Matched against the URL the request finishes on, never against the page — so it does nothing on a site that serves its login form without redirecting."
-      >
-        <Input
-          value={draft.login_url_pattern ?? ""}
-          onChange={(event) => set("login_url_pattern", text(event.target.value))}
-          placeholder="e.g. login.php"
-          {...notACredential}
-        />
-      </Field>
-      <Field label="Page must contain" hint="Something only a logged-in page shows.">
-        <Input
-          value={draft.success_pattern ?? ""}
-          onChange={(event) => set("success_pattern", text(event.target.value))}
-          placeholder="e.g. Log out"
-          {...notACredential}
-        />
-      </Field>
-      <Field label="Page must not contain" hint="Something only a logged-out page shows.">
-        <Input
-          value={draft.failure_pattern ?? ""}
-          onChange={(event) => set("failure_pattern", text(event.target.value))}
-          // Names no password: a placeholder mentioning one gets the field classified as a
-          // credential, which makes a password manager both fill it in and offer to save a login
-          // for the whole form. "Remember me" belongs to a login page just as reliably.
-          placeholder="e.g. Remember me"
-          {...notACredential}
-        />
-      </Field>
-    </div>
-  );
+/**
+ * How many things a check could tell a dead session by.
+ *
+ * The login URL counts, since a check derives the login-page rule from it — but only when it
+ * differs from the pinged page, which is exactly when that rule can fire.
+ */
+function countSignals(draft: SiteWrite): number {
+  const explicit = [draft.success_pattern, draft.failure_pattern, draft.login_url_pattern].filter(
+    Boolean,
+  ).length;
+  return explicit + (redirectsElsewhere(draft) ? 1 : 0);
+}
+
+function redirectsElsewhere(draft: SiteWrite): boolean {
+  if (!draft.login_url) return false;
+  try {
+    return new URL(draft.login_url).pathname !== new URL(draft.ping_url).pathname;
+  } catch {
+    // A URL still being typed is not a signal either way.
+    return false;
+  }
 }
 
 /**
- * Which approach an existing site's settings represent.
+ * Whether an existing site is being watched for a dead session.
  *
- * No rules means "don't detect", because that is what the site does and, having been saved that
- * way, is what its owner asked for. Guessing "you must have meant to compare" from the presence
- * of a session silently overrode a deliberate choice every time the form was reopened.
- *
- * Arriving straight from a login is the one case where the comparison should start selected, and
- * that is knowable from the way the panel was opened rather than from the row — so the caller
- * says so with ``initialApproach``.
+ * Anything set means yes. Nothing set means the site currently notices nothing, which is what its
+ * owner asked for by saving it that way — guessing otherwise overrode a deliberate choice every
+ * time the form was reopened.
  */
-function approachFor(site: Site | null): Approach {
-  if (site === null) return "none";
-  const set = [site.login_url_pattern, site.success_pattern, site.failure_pattern].filter(Boolean);
-  return set.length > 0 ? "manual" : "none";
+function watchingFor(site: Site | null): Watching {
+  if (site === null) return "no";
+  return countSignals(toWrite(site)) > 0 ? "yes" : "no";
 }

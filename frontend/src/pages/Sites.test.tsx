@@ -229,7 +229,7 @@ describe("Sites", () => {
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByLabelText(/^Name/)).toHaveValue("example");
 
-    await userEvent.click(dialog.getByRole("tab", { name: /Spotting a dead session/ }));
+    await userEvent.click(dialog.getByRole("tab", { name: /Advanced/ }));
 
     expect(dialog.getByLabelText(/Ends up at a URL like/)).toHaveValue("login.php");
   });
@@ -369,7 +369,7 @@ describe("the site form's examples", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    for (const label of [/Ends up at a URL like/, /Page must contain/, /Page must not contain/]) {
+    for (const label of [/Page must contain/, /Page must not contain/]) {
       expect(form.getByLabelText(label)).toHaveAttribute(
         "placeholder",
         expect.stringMatching(/^e\.g\. /),
@@ -426,8 +426,8 @@ describe("adding a site", () => {
     const form = within(screen.getByRole("dialog"));
 
     expect(form.getByLabelText(/^Name/)).toBeInTheDocument();
+    expect(form.queryByLabelText(/Page must contain/)).not.toBeInTheDocument();
     expect(form.queryByLabelText(/Ends up at a URL like/)).not.toBeInTheDocument();
-    expect(form.queryByRole("radio")).not.toBeInTheDocument();
   });
 
   it("can be saved with nothing but a name and a URL", async () => {
@@ -517,7 +517,12 @@ describe("editing a site", () => {
     server.use(
       http.get("/api/sites", () =>
         HttpResponse.json([
-          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+          makeSite({
+            login_url: null,
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
         ]),
       ),
     );
@@ -525,7 +530,7 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Set them myself/ }));
+    await userEvent.click(form.getByLabelText(/Don't detect a dead session/));
 
     expect(form.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(form.getByText(/could not tell a dead session/)).toBeInTheDocument();
@@ -535,7 +540,7 @@ describe("editing a site", () => {
     render(<Sites />);
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
-    await userEvent.clear(form.getByLabelText(/Ends up at a URL like/));
+    await userEvent.clear(form.getByLabelText(/Page must contain/));
 
     await userEvent.type(form.getByLabelText(/Page must contain/), "Log out");
 
@@ -547,7 +552,7 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
+    await userEvent.click(form.getByLabelText(/Don't detect a dead session/));
 
     expect(form.getByRole("button", { name: "Save changes" })).toBeEnabled();
   });
@@ -558,7 +563,7 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    expect(form.getByRole("radio", { name: /Work it out/ })).toBeDisabled();
+    expect(form.getByRole("button", { name: /Work it out from my login/ })).toBeDisabled();
     expect(form.getByText(/Log in to this site first/)).toBeInTheDocument();
   });
 
@@ -568,7 +573,12 @@ describe("editing a site", () => {
     server.use(
       http.get("/api/sites", () =>
         HttpResponse.json([
-          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+          makeSite({
+            login_url: null,
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
         ]),
       ),
     );
@@ -576,7 +586,7 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    expect(form.getByRole("radio", { name: /Don't detect/ })).toBeChecked();
+    expect(form.getByLabelText(/Don't detect a dead session/)).toBeChecked();
   });
 
   it("starts on the comparison when the login flow has just finished", async () => {
@@ -592,6 +602,14 @@ describe("editing a site", () => {
         HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
       ),
       http.post("/api/sites/1/session/import", () => HttpResponse.json({ detail: "imported" })),
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({
+          login_url: "https://example.org/login.php",
+          success_pattern: "Log out",
+          failure_pattern: null,
+          notes: [],
+        }),
+      ),
     );
     render(<Sites />);
     await screen.findByText("example");
@@ -601,7 +619,7 @@ describe("editing a site", () => {
     await userEvent.type(screen.getByLabelText("Cookies"), "uid=1");
     await userEvent.click(screen.getByRole("button", { name: "Save session" }));
 
-    expect(await screen.findByRole("radio", { name: /Work it out/ })).toBeChecked();
+    expect(await screen.findByLabelText(/Page must contain/)).toHaveValue("Log out");
   });
 
   it("fills the rules in from a comparison, and says what it found", async () => {
@@ -630,13 +648,12 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
-    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+    await userEvent.click(form.getByRole("button", { name: /Work it out from my login/ }));
 
     expect(await form.findByText(/ends at https:\/\/example\.org\/login\.php/)).toBeInTheDocument();
     // Every rule it found, not just one: each is applied by its own line, and a line that was
     // dropped would leave that field holding whatever the site already had.
-    expect(form.getByLabelText(/Ends up at a URL like/)).toHaveValue("login.php");
+    expect(form.getByLabelText(/Page must contain/)).toHaveValue("Log out");
     expect(form.getByLabelText(/Page must contain/)).toHaveValue("Log out");
     expect(form.getByLabelText(/Page must not contain/)).toHaveValue("");
   });
@@ -648,10 +665,9 @@ describe("editing a site", () => {
       http.post("/api/sites/1/detect", () =>
         HttpResponse.json({
           login_url: "https://example.org/login.php",
-          login_url_pattern: "login.php",
           success_pattern: null,
           failure_pattern: null,
-          notes: [],
+          notes: ["Signed out, the request ends at https://example.org/login.php instead."],
         }),
       ),
     );
@@ -659,10 +675,13 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
-    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+    await userEvent.click(form.getByRole("button", { name: /Work it out from my login/ }));
 
-    expect(await form.findByLabelText(/Login URL/)).toHaveValue("https://example.org/login.php");
+    // Waited on the note rather than a field, since this comparison found no page text at all —
+    // the redirect is the whole of what it found.
+    await form.findByText(/ends at https:\/\/example\.org\/login\.php/);
+    await userEvent.click(form.getByRole("tab", { name: /Advanced/ }));
+    expect(form.getByLabelText(/^Login URL/)).toHaveValue("https://example.org/login.php");
   });
 
   it("keeps a login URL the comparison could not improve on", async () => {
@@ -682,11 +701,11 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
-    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+    await userEvent.click(form.getByRole("button", { name: /Work it out from my login/ }));
 
     await form.findByDisplayValue("Log out");
-    expect(form.getByLabelText(/Login URL/)).toHaveValue("https://example.org/login.php");
+    await userEvent.click(form.getByRole("tab", { name: /Advanced/ }));
+    expect(form.getByLabelText(/^Login URL/)).toHaveValue("https://example.org/login.php");
   });
 
   it("reports a comparison that could not be made", async () => {
@@ -699,8 +718,7 @@ describe("editing a site", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Work it out/ }));
-    await userEvent.click(form.getByRole("button", { name: "Compare the two" }));
+    await userEvent.click(form.getByRole("button", { name: /Work it out from my login/ }));
 
     expect(await form.findByRole("alert")).toHaveTextContent("could not reach the site");
   });
@@ -871,14 +889,20 @@ describe("trying the detection rules out", () => {
     server.use(
       http.get("/api/sites", () =>
         HttpResponse.json([
-          makeSite({ login_url_pattern: null, success_pattern: null, failure_pattern: null }),
+          makeSite({
+            login_url: null,
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
         ]),
       ),
     );
     render(<Sites />);
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
-    await userEvent.click(form.getByRole("radio", { name: /Set them myself/ }));
+
+    await userEvent.click(form.getByLabelText(/Don't detect a dead session/));
 
     expect(form.getByRole("button", { name: "Try these rules" })).toBeDisabled();
   });
@@ -888,7 +912,7 @@ describe("trying the detection rules out", () => {
     await screen.findByText("example");
     const form = await openTab(/Spotting a dead session/);
 
-    await userEvent.click(form.getByRole("radio", { name: /Don't detect/ }));
+    await userEvent.click(form.getByLabelText(/Don't detect a dead session/));
 
     expect(form.queryByRole("button", { name: "Try these rules" })).not.toBeInTheDocument();
   });
@@ -989,5 +1013,270 @@ describe("what each rule did", () => {
 
     await form.findByText(/matches only the page it is meant to/);
     expect(form.getAllByText(/never matched either page/)).toHaveLength(2);
+  });
+});
+
+describe("after a first login", () => {
+  const detected = {
+    login_url: "https://example.org/login.php",
+    success_pattern: "Log out",
+    failure_pattern: "Remember me",
+    notes: ["'Log out' is on the page when signed in and not when signed out."],
+  };
+
+  async function logIn(extra: Parameters<typeof server.use> = []) {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            login_url: null,
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
+        ]),
+      ),
+      http.post("/api/sites/1/login-session", () =>
+        HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
+      ),
+      http.post("/api/sites/1/session/import", () => HttpResponse.json({ detail: "imported" })),
+      ...extra,
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Log in to example" }));
+    await userEvent.click(screen.getByRole("button", { name: "Paste cookies" }));
+    await userEvent.type(screen.getByLabelText("Cookies"), "uid=1");
+    await userEvent.click(screen.getByRole("button", { name: "Save session" }));
+  }
+
+  it("compares the two pages without being asked", async () => {
+    // Someone who has just logged in has nothing to add by hand, and everything the comparison
+    // needs now exists — so making them press a button asks for nothing useful.
+    let compared = 0;
+    await logIn([
+      http.post("/api/sites/1/detect", () => {
+        compared += 1;
+        return HttpResponse.json(detected);
+      }),
+    ]);
+
+    await waitFor(() => expect(compared).toBe(1));
+  });
+
+  it("fills in everything it found", async () => {
+    await logIn([http.post("/api/sites/1/detect", () => HttpResponse.json(detected))]);
+
+    expect(await screen.findByDisplayValue("Log out")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Remember me")).toBeInTheDocument();
+  });
+
+  it("turns detection on once there is something to detect with", async () => {
+    // The site had nothing set a moment ago, which is what "don't detect" describes — and is no
+    // longer true the instant the comparison finds something.
+    await logIn([http.post("/api/sites/1/detect", () => HttpResponse.json(detected))]);
+
+    await screen.findByDisplayValue("Log out");
+    expect(screen.getByLabelText(/Don't detect a dead session/)).not.toBeChecked();
+  });
+
+  it("says so when there was nothing to find", async () => {
+    await logIn([
+      http.post("/api/sites/1/detect", () =>
+        HttpResponse.json({
+          login_url: null,
+          success_pattern: null,
+          failure_pattern: null,
+          notes: ["The page looks the same signed in and signed out."],
+        }),
+      ),
+    ]);
+
+    expect(await screen.findByText(/looks the same signed in and signed out/)).toBeInTheDocument();
+  });
+
+  it("compares once, not once per keystroke", async () => {
+    let compared = 0;
+    await logIn([
+      http.post("/api/sites/1/detect", () => {
+        compared += 1;
+        return HttpResponse.json(detected);
+      }),
+    ]);
+    await screen.findByDisplayValue("Log out");
+
+    await userEvent.type(screen.getByDisplayValue("Log out"), " now");
+
+    expect(compared).toBe(1);
+  });
+});
+
+describe("what counts as something to check by", () => {
+  it("counts a login URL that differs from the pinged page", async () => {
+    // A check derives the login-page rule from it, so it is a signal in its own right.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            login_url: "https://example.org/login.php",
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
+        ]),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    expect(form.getByLabelText(/Don't detect a dead session/)).not.toBeChecked();
+    expect(form.queryByText(/could not tell a dead session/)).not.toBeInTheDocument();
+  });
+
+  it("does not count a login URL that is the pinged page", async () => {
+    // A rule matching where the ping already finishes would report a dead session for ever, so a
+    // check derives nothing from it — and neither does this.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            ping_url: "https://example.org/home",
+            login_url: "https://example.org/home",
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
+        ]),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    expect(form.getByLabelText(/Don't detect a dead session/)).toBeChecked();
+  });
+
+  it("says where a signed-out request is expected to go", async () => {
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    expect(form.getByText(/expected to end up at/)).toBeInTheDocument();
+  });
+});
+
+describe("the site form's own edges", () => {
+  it("sends a deadline that was typed, and nothing when it is cleared", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post("/api/sites", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite(), { status: 201 });
+      }),
+      http.post("/api/sites/1/login-session", () =>
+        HttpResponse.json({ detail: "browser sessions are disabled" }, { status: 503 }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: /Add site/ }));
+    const form = within(screen.getByRole("dialog"));
+    await fillTheSite(form, "deadlined", "https://example.org/home");
+
+    const deadline = form.getByLabelText(/Site disables an account after/);
+    await userEvent.type(deadline, "90");
+    await userEvent.clear(deadline);
+    await userEvent.type(deadline, "60");
+    await userEvent.click(form.getByRole("button", { name: "Add site and log in" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.inactivity_limit_days).toBe(60);
+  });
+
+  it("survives a stored login URL that is not a URL", async () => {
+    // Nothing in the form should decide it is a signal, or fall over working it out.
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          makeSite({
+            login_url: "not a url at all",
+            login_url_pattern: null,
+            success_pattern: null,
+            failure_pattern: null,
+          }),
+        ]),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    expect(form.getByLabelText(/Don't detect a dead session/)).toBeChecked();
+  });
+});
+
+describe("the escape hatch under Advanced", () => {
+  /** Each test registers its own PUT stub first; adding another here would take precedence. */
+  async function editAdvanced() {
+    render(<Sites />);
+    await screen.findByText("example");
+    return openTab(/Advanced/);
+  }
+
+  it("saves a login URL typed by hand", async () => {
+    // A check derives its login-page rule from this, so editing it changes what a check does.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    const form = await editAdvanced();
+
+    await userEvent.clear(form.getByLabelText(/^Login URL/));
+    await userEvent.type(form.getByLabelText(/^Login URL/), "https://example.org/enter");
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.login_url).toBe("https://example.org/enter");
+  });
+
+  it("saves a pattern override for a site that redirects somewhere else", async () => {
+    // The one case the derivation cannot express: a signed-out request sent somewhere other than
+    // the page you log in on.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    const form = await editAdvanced();
+
+    await userEvent.clear(form.getByLabelText(/Ends up at a URL like/));
+    await userEvent.type(form.getByLabelText(/Ends up at a URL like/), "session-expired");
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.login_url_pattern).toBe("session-expired");
+  });
+
+  it("clears the override back to the derived rule", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    const form = await editAdvanced();
+
+    await userEvent.clear(form.getByLabelText(/Ends up at a URL like/));
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.login_url_pattern).toBeNull();
   });
 });
