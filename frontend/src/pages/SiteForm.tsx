@@ -24,12 +24,12 @@ import {
   type Site,
   type SiteWrite,
 } from "../api/types";
+import { notACredential } from "../components/autofill";
 import { Modal } from "../components/Modal";
 import {
   Button,
   Field,
   Input,
-  notACredential,
   Problem,
   Select,
   TextArea,

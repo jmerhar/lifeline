@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { countdown, isGood, relativeTime, summarise, timestamp } from "./format";
+import {
+  countdown,
+  isGood,
+  relativeTime,
+  sessionContents,
+  summarise,
+  timestamp,
+} from "./format";
 
 const NOW = new Date("2026-09-06T12:00:00Z");
 
@@ -107,5 +114,39 @@ describe("summarise", () => {
 
   it("leaves out states nothing is in", () => {
     expect(summarise(["alive"])).not.toContain("lapsed");
+  });
+});
+
+describe("sessionContents", () => {
+  it("counts cookies when that is all there is", () => {
+    expect(sessionContents({ cookie_names: ["a", "b"], storage_names: [] })).toBe("2 cookies");
+  });
+
+  it("uses the singular for one", () => {
+    expect(sessionContents({ cookie_names: ["a"], storage_names: [] })).toBe("1 cookie");
+  });
+
+  it("describes a session kept in local storage rather than calling it empty", () => {
+    // "0 cookie(s)" read as a capture that failed, for a site whose session is perfectly fine
+    // and simply not in a cookie.
+    expect(sessionContents({ cookie_names: [], storage_names: ["auth.token"] })).toBe(
+      "1 item in local storage",
+    );
+  });
+
+  it("mentions both when there are both", () => {
+    expect(sessionContents({ cookie_names: ["s"], storage_names: ["a", "b"] })).toBe(
+      "1 cookie and 2 items in local storage",
+    );
+  });
+
+  it("says the contents are unknown rather than claiming there are none", () => {
+    // A session captured before this was recorded. Saying "0 cookies" would be a claim about it
+    // that nothing here can support.
+    expect(sessionContents({ cookie_names: [], storage_names: [] })).toBe("contents not recorded");
+  });
+
+  it("copes with a session from an API that does not send the stored keys", () => {
+    expect(sessionContents({ cookie_names: ["s"] })).toBe("1 cookie");
   });
 });

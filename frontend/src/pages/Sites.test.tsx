@@ -117,7 +117,7 @@ describe("Sites", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Show details for example" }));
 
-    expect(await screen.findByText(/2 cookie\(s\), captured/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 cookies, captured/)).toBeInTheDocument();
     expect(screen.getByText("https://example.org/home")).toBeInTheDocument();
     // The rendered expiry, not just the field name: the name alone is already guarded by tsc.
     expect(screen.getByText(/1 Jan 2027/)).toBeInTheDocument();

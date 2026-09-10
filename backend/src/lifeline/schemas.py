@@ -62,6 +62,8 @@ class SessionRead(BaseModel):
     rotated_at: datetime | None
     expires_at: datetime | None
     cookie_names: list[str]
+    # The keys of what is stored per origin. A session can consist of nothing else.
+    storage_names: list[str] = []
 
 
 class CheckRead(BaseModel):

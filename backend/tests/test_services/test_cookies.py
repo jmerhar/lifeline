@@ -19,6 +19,7 @@ from lifeline.services.cookies import (
     normalise_state,
     parse_import,
     state_to_jar,
+    storage_names,
 )
 
 FUTURE = 4102444800.0  # 2100-01-01, comfortably beyond any test run.
@@ -458,3 +459,38 @@ class TestASiteThatKeepsItsSessionOutsideCookies:
 
     def test_names_the_foreign_domains_it_dropped(self) -> None:
         assert foreign_domains(self.state(), "app.example") == [".github.com", "github.com"]
+
+
+class TestNamingWhatIsStored:
+    def test_reports_the_keys_held_per_origin(self) -> None:
+        state = {
+            "cookies": [],
+            "origins": [
+                {
+                    "origin": "https://app.example",
+                    "localStorage": [
+                        {"name": "auth.token", "value": "secret"},
+                        {"name": "auth.settings", "value": "{}"},
+                    ],
+                }
+            ],
+        }
+
+        assert storage_names(state) == ["auth.settings", "auth.token"]
+
+    def test_never_reports_a_value(self) -> None:
+        # The same rule as cookies: a name says what is held, a value *is* the session.
+        state = {
+            "cookies": [],
+            "origins": [
+                {
+                    "origin": "https://app.example",
+                    "localStorage": [{"name": "k", "value": "SECRET"}],
+                }
+            ],
+        }
+
+        assert "SECRET" not in str(storage_names(state))
+
+    def test_reports_nothing_for_a_session_of_cookies_alone(self) -> None:
+        assert storage_names(state_with(name="session")) == []

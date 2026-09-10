@@ -445,3 +445,18 @@ def foreign_domains(state: StorageState, *hosts: str) -> list[str]:
 def cookie_names(state: StorageState) -> list[str]:
     """The names of the stored cookies, for display. Never their values."""
     return sorted({cookie["name"] for cookie in state["cookies"]})
+
+
+def storage_names(state: StorageState) -> list[str]:
+    """The keys of everything stored per origin, for display. Never their values.
+
+    A site that builds its page in the browser keeps its session here rather than in a cookie, so
+    without this a perfectly good capture is described as holding nothing.
+    """
+    return sorted(
+        {
+            item["name"]
+            for origin in state["origins"]
+            for item in origin.get("localStorage", [])
+        }
+    )

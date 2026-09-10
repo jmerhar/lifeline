@@ -618,6 +618,11 @@ export interface components {
             expires_at: string | null;
             /** Rotated At */
             rotated_at: string | null;
+            /**
+             * Storage Names
+             * @default []
+             */
+            storage_names: string[];
         };
         /**
          * SettingsRead

@@ -26,7 +26,14 @@ from .checker import (
     next_check_time,
     perform_check,
 )
-from .cookies import StorageState, cookie_names, expires_at, for_host, foreign_domains
+from .cookies import (
+    StorageState,
+    cookie_names,
+    expires_at,
+    for_host,
+    foreign_domains,
+    storage_names,
+)
 from .crypto import Cipher, DecryptionError
 from .notifier import Event, Notifier
 from .store import due_sites, get_site, load_settings_row
@@ -212,6 +219,7 @@ class CheckRunner:
         stored.state = self._cipher.encrypt_json(state)
         stored.expires_at = expires_at(state)
         stored.cookie_names = ",".join(cookie_names(state))
+        stored.storage_names = ",".join(storage_names(state))
         return state
 
     def _apply(

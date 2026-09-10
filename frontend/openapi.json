@@ -443,6 +443,14 @@
               }
             ],
             "title": "Rotated At"
+          },
+          "storage_names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Storage Names",
+            "type": "array"
           }
         },
         "required": [

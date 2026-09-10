@@ -68,6 +68,7 @@ def to_read(site: Site, pulse: list[str] | None = None, risk: str | None = None)
             rotated_at=stored.rotated_at,
             expires_at=stored.expires_at,
             cookie_names=[name for name in stored.cookie_names.split(",") if name],
+            storage_names=[name for name in (stored.storage_names or "").split(",") if name],
         )
     return SiteRead(
         id=site.id,

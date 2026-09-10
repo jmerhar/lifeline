@@ -101,3 +101,33 @@ export function summarise(statuses: SiteStatus[]): string {
   }
   return parts.join(" · ");
 }
+
+/**
+ * What a captured session actually holds.
+ *
+ * Counting cookies alone described a site that keeps its token in local storage as holding
+ * "0 cookie(s)", which reads as a capture that failed rather than as a working session kept
+ * somewhere else.
+ *
+ * A session recorded before this was measured reports neither, and says so — the alternative
+ * would be claiming it holds nothing.
+ */
+export function sessionContents(session: {
+  cookie_names: string[];
+  storage_names?: string[];
+}): string {
+  const parts: string[] = [];
+  if (session.cookie_names.length > 0) {
+    parts.push(plural(session.cookie_names.length, "cookie"));
+  }
+  const stored = session.storage_names ?? [];
+  if (stored.length > 0) {
+    parts.push(`${plural(stored.length, "item")} in local storage`);
+  }
+  if (parts.length === 0) return "contents not recorded";
+  return parts.join(" and ");
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}

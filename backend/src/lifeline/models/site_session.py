@@ -39,5 +39,8 @@ class SiteSession(Base, TimestampMixin):
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, default=None)
     # Cookie names only, for display. Never the values.
     cookie_names: Mapped[str] = mapped_column(Text, default="")
+    # The keys of what is held per origin — local storage, where a site that builds its page in
+    # the browser keeps its session instead of in a cookie. Names only, never values.
+    storage_names: Mapped[str] = mapped_column(Text, default="")
 
     site: Mapped[Site] = relationship(back_populates="session")

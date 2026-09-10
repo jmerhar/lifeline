@@ -14,7 +14,13 @@ import { toWrite, type Site, type SiteWrite } from "../api/types";
 import { PulseStrip } from "../components/PulseStrip";
 import { StatusBadge } from "../components/StatusBadge";
 import { Button, Card, Empty, Problem, Spinner, Switch } from "../components/ui";
-import { countdown, relativeTime, summarise, timestamp } from "../lib/format";
+import {
+  countdown,
+  relativeTime,
+  sessionContents,
+  summarise,
+  timestamp,
+} from "../lib/format";
 import { SessionPanel } from "./SessionPanel";
 import { SiteForm, type Tab } from "./SiteForm";
 
@@ -283,7 +289,7 @@ function SiteRow({
               <Detail label="Last success">{timestamp(site.last_ok_at)}</Detail>
               <Detail label="Session">
                 {site.session
-                  ? `${site.session.cookie_names.length} cookie(s), captured ${relativeTime(
+                  ? `${sessionContents(site.session)}, captured ${relativeTime(
                       site.session.captured_at,
                     )} (${site.session.captured_via})`
                   : "none — log in to capture one"}
