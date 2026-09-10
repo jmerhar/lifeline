@@ -418,3 +418,43 @@ class TestExpiresAt:
 
     def test_reports_nothing_when_no_cookie_carries_an_expiry(self) -> None:
         assert expires_at(state_with(expires=SESSION_COOKIE_EXPIRY)) is None
+
+
+class TestASiteThatKeepsItsSessionOutsideCookies:
+    """A single-page application usually holds its token in local storage, not in a cookie."""
+
+    def state(self) -> dict:
+        return {
+            "cookies": [
+                {"name": "_gh_sess", "value": "g", "domain": "github.com", "path": "/"},
+                {"name": "logged_in", "value": "y", "domain": ".github.com", "path": "/"},
+            ],
+            "origins": [
+                {
+                    "origin": "https://app.example",
+                    "localStorage": [{"name": "auth.token", "value": "t"}],
+                },
+                {"origin": "https://github.com", "localStorage": [{"name": "gh", "value": "x"}]},
+            ],
+        }
+
+    def test_drops_foreign_cookies_even_when_the_site_has_none_of_its_own(self) -> None:
+        # Measuring only cookies read this as "scoping would throw the session away" and kept
+        # every foreign cookie — on every write, so for ever.
+        kept = for_host(self.state(), "app.example")
+
+        assert cookie_names(kept) == []
+        assert [origin["origin"] for origin in kept["origins"]] == ["https://app.example"]
+
+    def test_still_refuses_to_leave_nothing_at_all(self) -> None:
+        # The guard is about losing a session, and with neither a cookie nor an origin of its own
+        # there is nothing here that belongs to this site.
+        state = {
+            "cookies": [{"name": "s", "value": "v", "domain": "elsewhere.example", "path": "/"}],
+            "origins": [],
+        }
+
+        assert for_host(state, "app.example") == state
+
+    def test_names_the_foreign_domains_it_dropped(self) -> None:
+        assert foreign_domains(self.state(), "app.example") == [".github.com", "github.com"]

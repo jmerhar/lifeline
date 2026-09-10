@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from ..cookies import StorageState
 
@@ -129,6 +130,44 @@ async def _settle(page: Any) -> None:
         logger.debug("page never settled; reading it as it stands")
 
 
+async def forget_site(context: Any, page: Any, url: str) -> None:
+    """Leave the browser holding nothing that would sign anybody in to ``url``.
+
+    Cookies are only half of it. A site that builds its page in the browser generally keeps its
+    token in local storage instead, and emptying the cookie jar leaves that untouched — so the site
+    opens already signed in, which is how somebody else's account gets captured for a new site.
+
+    Everything the origin holds goes: its cookies, both kinds of storage, its databases and caches.
+    Only that origin, so nothing belonging to another site in this shared profile is disturbed and
+    an extension keeps the setup that was done once for it.
+    """
+    from playwright.async_api import Error as PlaywrightError
+
+    origin = _origin_of(url)
+    if origin is None:
+        return
+    try:
+        session = await context.new_cdp_session(page)
+        # Cookies included: asking per-origin covers them, which is why nothing here empties the
+        # jar wholesale and logs every other site in this profile out along the way.
+        await session.send(
+            "Storage.clearDataForOrigin", {"origin": origin, "storageTypes": "all"}
+        )
+        await session.detach()
+    except PlaywrightError:
+        # Leaves the browser signed in rather than failing the login outright, since a person is
+        # about to look at it and can sign out themselves.
+        logger.warning("could not clear stored data for %s", origin, exc_info=True)
+
+
+def _origin_of(url: str) -> str | None:
+    """The scheme and host of ``url``, which is what storage is keyed by."""
+    parts = urlsplit(url)
+    if not parts.scheme or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}"
+
+
 class _PlaywrightBrowser:
     """A headful persistent context, plus the machinery needed to shut it down."""
 
@@ -221,12 +260,11 @@ class PlaywrightDriver:
             await playwright.stop()
             raise
 
-        if signed_out:
-            # Before navigating, so the site is asked for as somebody with no session. The
-            # extension keeps its own state outside the cookie jar and is unaffected.
-            await context.clear_cookies()
-
         page = context.pages[0] if context.pages else await context.new_page()
+        if signed_out:
+            # Before navigating, so the site is asked for as somebody with no session.
+            await forget_site(context, page, url)
+
         try:
             await page.goto(url, wait_until="domcontentloaded")
         except Exception:

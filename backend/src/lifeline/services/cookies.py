@@ -367,10 +367,10 @@ def for_host(state: StorageState, *hosts: str) -> StorageState:
     served from one name and signed into on another is one site, and scoping to the pinged host
     alone would throw away the very cookie the login just produced.
 
-    A scoping that would keep nothing is refused, and the state returned unchanged. Emptying a
-    captured session is never the right answer — whatever produced that result is a bug or an
-    unforeseen shape, and losing the login is a far worse outcome than keeping a few cookies that
-    will never be sent.
+    A scoping that would keep nothing at all — no cookies and no stored origins — is refused, and
+    the state returned unchanged. Emptying a captured session is never the right answer: whatever
+    produced that result is a bug or an unforeseen shape, and losing the login is a far worse
+    outcome than keeping a few cookies that will never be sent.
     """
     known = [_canonical(host) for host in hosts if host]
     if not known:
@@ -378,13 +378,17 @@ def for_host(state: StorageState, *hosts: str) -> StorageState:
     kept = [
         cookie for cookie in state["cookies"] if _belongs_to_any(cookie.get("domain", ""), known)
     ]
-    if state["cookies"] and not kept:
-        return state
     origins = [
         origin
         for origin in state["origins"]
         if _belongs_to_any(urlsplit(origin["origin"]).hostname or "", known)
     ]
+    # Both halves count. A site that keeps its session in local storage rather than in a cookie
+    # has none of its own to keep, so measuring only cookies read that as "this would throw the
+    # session away" and kept every foreign cookie in the jar instead — for ever, since the same
+    # thing happened on every write.
+    if (state["cookies"] or state["origins"]) and not (kept or origins):
+        return state
     return {"cookies": kept, "origins": origins}
 
 

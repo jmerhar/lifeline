@@ -126,8 +126,24 @@ class TestStartAndStop:
 
         await supervisor.stop(wrapped)
 
-        with pytest.raises(ProcessLookupError):
-            os.kill(child_pid, 0)
+        assert await gone(child_pid)
+
+
+async def gone(pid: int, *, within_seconds: float = 5.0) -> bool:
+    """Whether ``pid`` has left, waiting a little for it to.
+
+    A signal is delivered asynchronously and the process id stays valid while the kernel works
+    through it, so asking the instant after the kill answers about timing rather than about
+    whether the kill reached the whole tree — which is what made this flake under load.
+    """
+    deadline = asyncio.get_running_loop().time() + within_seconds
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        await asyncio.sleep(0.05)
+    return False
 
 
 class TestReap:

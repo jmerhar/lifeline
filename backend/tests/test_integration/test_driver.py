@@ -206,3 +206,104 @@ class TestAPageBuiltInTheBrowser:
         )
 
         assert "Log out" in result.body
+
+
+class TestStartingSignedOut:
+    """What the browser is left holding when a login opens for a site with no stored session.
+
+    Headless, because none of this needs a screen: the profile, its cookie jar and its stored
+    data behave the same either way, and what is being proved is that they are empty.
+    """
+
+    async def open_profile(self, profile: Path, url: str, *, signed_out: bool) -> tuple[str, str]:
+        """Open ``url`` in a persistent profile and report what the page can see."""
+        from playwright.async_api import async_playwright
+
+        from lifeline.services.browser.driver import forget_site
+
+        playwright = await async_playwright().start()
+        try:
+            context = await playwright.chromium.launch_persistent_context(
+                str(profile), headless=True, args=["--no-sandbox"]
+            )
+            try:
+                page = context.pages[0] if context.pages else await context.new_page()
+                if signed_out:
+                    await forget_site(context, page, url)
+                await page.goto(url, wait_until="domcontentloaded")
+                return (
+                    await page.evaluate("localStorage.getItem('auth.token') || ''"),
+                    await page.evaluate("document.cookie"),
+                )
+            finally:
+                await context.close()
+        finally:
+            await playwright.stop()
+
+    async def sign_in(self, profile: Path, site_server: str) -> None:
+        """Leave the profile holding a session, in local storage and in a cookie."""
+        token, cookies = await self.open_profile(
+            profile, f"{site_server}/remember", signed_out=False
+        )
+        assert token == "secret"
+        assert "crumb=yes" in cookies
+
+    async def test_forgets_a_session_kept_in_local_storage(
+        self, chromium_available: bool, site_server: str, tmp_path: Path
+    ) -> None:
+        # Clearing the cookie jar leaves this behind, so the site opened already signed in — which
+        # is how another account gets captured for a site being added.
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+        profile = tmp_path / "profile"
+        await self.sign_in(profile, site_server)
+
+        # Read from a page that sets nothing: the one that signs you in does so again on the way
+        # past, which would answer that the page works rather than that the profile was cleared.
+        token, _ = await self.open_profile(profile, f"{site_server}/quiet", signed_out=True)
+
+        assert token == ""
+
+    async def test_forgets_the_cookies_too(
+        self, chromium_available: bool, site_server: str, tmp_path: Path
+    ) -> None:
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+        profile = tmp_path / "profile"
+        await self.sign_in(profile, site_server)
+
+        _, cookies = await self.open_profile(profile, f"{site_server}/quiet", signed_out=True)
+
+        assert "crumb=yes" not in cookies
+
+    async def test_leaves_a_stored_session_alone_when_not_asked_to(
+        self, chromium_available: bool, site_server: str, tmp_path: Path
+    ) -> None:
+        # A site being logged into again keeps whatever the browser has, which saves the trip.
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+        profile = tmp_path / "profile"
+        await self.sign_in(profile, site_server)
+
+        token, cookies = await self.open_profile(profile, f"{site_server}/quiet", signed_out=False)
+
+        assert token == "secret"
+        assert "crumb=yes" in cookies
+
+    async def test_leaves_another_site_in_the_profile_alone(
+        self, chromium_available: bool, site_server: str, tmp_path: Path
+    ) -> None:
+        # The profile is shared by every site, so emptying the jar wholesale would sign somebody
+        # out of all of them — and out of the password manager's own web vault.
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+        profile = tmp_path / "profile"
+        await self.sign_in(profile, site_server)
+        elsewhere = f"http://localhost:{site_server.rsplit(':', maxsplit=1)[1]}"
+
+        # Forgets the other origin, which shares this server but is a different site to a browser.
+        await self.open_profile(profile, f"{elsewhere}/quiet", signed_out=True)
+
+        token, cookies = await self.open_profile(profile, f"{site_server}/quiet", signed_out=False)
+        assert token == "secret"
+        assert "crumb=yes" in cookies

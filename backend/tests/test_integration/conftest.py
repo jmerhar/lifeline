@@ -65,6 +65,30 @@ class SiteHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"<html>no such page</html>")
             return
 
+        if self.path == "/quiet":
+            # Sets nothing at all. Reading the browser's state from the page that signs you in
+            # proves only that the page works: it signs you in again on the way past.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body>nothing to see</body></html>")
+            return
+
+        if self.path == "/remember":
+            # Signs somebody in the way a single-page application does: a token in local storage
+            # rather than a cookie, which is what a cleared cookie jar leaves untouched.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            # Given an age, so it outlives the browser. A session cookie is discarded on close
+            # whatever anything else does, which would prove the clearing works without it.
+            self.send_header("Set-Cookie", "crumb=yes; Path=/; Max-Age=3600")
+            self.end_headers()
+            self.wfile.write(
+                b"<html><body><script>localStorage.setItem('auth.token', 'secret');"
+                b"</script>signed in</body></html>"
+            )
+            return
+
         if self.path.startswith("/app") or self.path == "/auth/signin":
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
