@@ -5,7 +5,7 @@
  * component library for that would be more code than the screens themselves.
  */
 
-import { cloneElement, isValidElement, useId } from "react";
+import { cloneElement, isValidElement, useId, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -100,6 +100,48 @@ const inputClasses = `w-full rounded border border-line bg-canvas px-2.5 py-1.5 
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClasses} ${className}`} />;
+}
+
+/**
+ * A number field that lets you clear it.
+ *
+ * A plain controlled number input reading `Number(event.target.value)` turns an emptied box into
+ * zero, which is both a value nobody typed and, for a field with a minimum, not a legal one. Worse,
+ * the box then holds a `0` for the next digit to land beside, so clearing and typing 6 leaves 06.
+ *
+ * So the text being typed is this component's own, and only a parseable one is reported upwards.
+ * Emptying it therefore shows nothing and changes nothing, and the browser's own required-field
+ * check is what stops an empty box being saved.
+ */
+export function NumberInput({
+  value,
+  onChange,
+  ...props
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type">) {
+  // The text belongs to this field for as long as it is on screen, seeded from the value it was
+  // given. Nothing reads the prop again afterwards, and that is the point: a required field's owner
+  // keeps the last legal number rather than accepting an empty one, so a field that re-read the
+  // prop would undo the emptying on the very next render — putting the old digit back for the next
+  // keystroke to land beside. A form opened on a different site mounts a new field and starts over.
+  const [typed, setTyped] = useState(() => (value == null ? "" : String(value)));
+
+  return (
+    <Input
+      {...props}
+      type="number"
+      value={typed}
+      onChange={(event) => {
+        const next = event.target.value;
+        setTyped(next);
+        const parsed = next === "" ? null : Number(next);
+        if (parsed !== null && !Number.isFinite(parsed)) return;
+        onChange(parsed);
+      }}
+    />
+  );
 }
 
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

@@ -30,6 +30,7 @@ import {
   Button,
   Field,
   Input,
+  NumberInput,
   Problem,
   Select,
   TextArea,
@@ -278,12 +279,11 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
         />
       </Field>
       <Field label="Check every" hint="Days between checks.">
-        <Input
-          type="number"
+        <NumberInput
           min={1}
           max={365}
           value={draft.interval_days}
-          onChange={(event) => set("interval_days", Number(event.target.value))}
+          onChange={(days) => set("interval_days", days ?? draft.interval_days)}
           required
         />
       </Field>
@@ -291,17 +291,11 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
         label="Site disables an account after"
         hint="Optional. Days. Fill this in and lifeline counts down and warns you in time."
       >
-        <Input
-          type="number"
+        <NumberInput
           min={1}
           max={3650}
-          value={draft.inactivity_limit_days ?? ""}
-          onChange={(event) =>
-            set(
-              "inactivity_limit_days",
-              event.target.value === "" ? null : Number(event.target.value),
-            )
-          }
+          value={draft.inactivity_limit_days ?? null}
+          onChange={(days) => set("inactivity_limit_days", days)}
         />
       </Field>
       <Field label="How to ping" hint="Use a browser only for sites that need JavaScript.">
@@ -586,12 +580,11 @@ function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: T
         />
       </Field>
       <Field label="Expected status" hint="The HTTP status a good response has.">
-        <Input
-          type="number"
+        <NumberInput
           min={100}
           max={599}
           value={draft.expected_status}
-          onChange={(event) => set("expected_status", Number(event.target.value))}
+          onChange={(status) => set("expected_status", status ?? draft.expected_status)}
           required
         />
       </Field>
@@ -599,12 +592,11 @@ function Advanced({ draft, set, text }: { draft: SiteWrite; set: Setter; text: T
         label="Spread checks by"
         hint="Percent, so a site is not asked at the same time forever."
       >
-        <Input
-          type="number"
+        <NumberInput
           min={0}
           max={50}
           value={draft.jitter_percent}
-          onChange={(event) => set("jitter_percent", Number(event.target.value))}
+          onChange={(percent) => set("jitter_percent", percent ?? draft.jitter_percent)}
         />
       </Field>
       <Field

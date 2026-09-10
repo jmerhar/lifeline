@@ -1331,3 +1331,71 @@ describe("trying the derived rule", () => {
     expect(form.getByText(/never matched either page/)).toBeInTheDocument();
   });
 });
+
+describe("a number field that can be cleared", () => {
+  async function intervalField() {
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+    return { form, field: form.getByLabelText(/Check every/) };
+  }
+
+  it("shows nothing when emptied, rather than a zero nobody typed", async () => {
+    // Reading Number("") gave 0, which is also below the field's own minimum.
+    const { field } = await intervalField();
+
+    await userEvent.clear(field);
+
+    expect(field).toHaveValue(null);
+  });
+
+  it("does not leave a digit for the next keystroke to land beside", async () => {
+    // Clearing and typing 6 used to leave 06.
+    const { field } = await intervalField();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "6");
+
+    expect(field).toHaveValue(6);
+  });
+
+  it("keeps the last real number when the box is left empty", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    const { form, field } = await intervalField();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "12");
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.interval_days).toBe(12);
+  });
+
+  it("lets an optional number be cleared back to nothing", async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.get("/api/sites", () => HttpResponse.json([makeSite({ inactivity_limit_days: 90 })])),
+      http.put("/api/sites/1", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(makeSite());
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+
+    await userEvent.clear(form.getByLabelText(/Site disables an account after/));
+    await userEvent.click(form.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.inactivity_limit_days).toBeNull();
+  });
+});
