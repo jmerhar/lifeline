@@ -205,6 +205,8 @@ class RuleTrial(BaseModel):
     stored would answer a question nobody asked, and the point is to find out before saving.
     """
 
+    # What a check derives its first rule from, so trying rules out has to be told about it.
+    login_url: str | None = None
     login_url_pattern: str | None = None
     success_pattern: str | None = None
     failure_pattern: str | None = None

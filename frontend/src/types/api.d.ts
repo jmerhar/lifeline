@@ -577,6 +577,8 @@ export interface components {
              * @default true
              */
             follow_redirects: boolean;
+            /** Login Url */
+            login_url?: string | null;
             /** Login Url Pattern */
             login_url_pattern?: string | null;
             /** Success Pattern */

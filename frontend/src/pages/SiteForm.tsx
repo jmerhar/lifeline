@@ -120,6 +120,7 @@ export function SiteForm({
   const tryOut = useMutation({
     mutationFn: () =>
       api.testRules(site!.id, {
+        login_url: draft.login_url,
         login_url_pattern: draft.login_url_pattern,
         success_pattern: draft.success_pattern,
         failure_pattern: draft.failure_pattern,

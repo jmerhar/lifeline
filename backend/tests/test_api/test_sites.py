@@ -465,3 +465,54 @@ class TestTryingRulesOverHttp:
 
     async def test_needs_a_login(self, client: httpx.AsyncClient, admin: User) -> None:
         assert (await client.post("/api/sites/1/test-rules", json={})).status_code == 401
+
+    async def test_tries_the_rule_derived_from_the_login_url(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        # A check consults this before anything else, and the trial left it out entirely — so a
+        # site whose only working rule was the redirect was told it had nothing.
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        body = (
+            await logged_in.post(
+                f"/api/sites/{created['id']}/test-rules",
+                json={"login_url": "https://example.org/login.php", "expected_status": 200},
+            )
+        ).json()
+
+        assert [rule["rule"] for rule in body["rules"]] == ["login_url_pattern"]
+
+    async def test_says_that_rule_did_nothing_when_the_site_does_not_redirect(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        body = (
+            await logged_in.post(
+                f"/api/sites/{created['id']}/test-rules",
+                json={"login_url": "https://example.org/login.php", "expected_status": 200},
+            )
+        ).json()
+
+        assert body["rules"][0]["on_live"] is False
+        assert body["rules"][0]["on_dead"] is False
+        assert body["rules"][0]["helps"] is False
+
+    async def test_ignores_a_login_url_that_is_the_pinged_page(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, cipher, created: dict, stub
+    ) -> None:
+        # A rule matching where the ping already finishes would report a dead session for ever, so
+        # a check derives nothing from it — and neither should the trial.
+        await self.give_it_a_session(db, cipher, created["id"])
+        stub.get("https://example.org/home").mock(side_effect=self.answer)
+
+        body = (
+            await logged_in.post(
+                f"/api/sites/{created['id']}/test-rules",
+                json={"login_url": "https://example.org/home", "success_pattern": "Log out"},
+            )
+        ).json()
+
+        assert [rule["rule"] for rule in body["rules"]] == ["success_pattern"]

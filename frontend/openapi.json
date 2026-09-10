@@ -324,6 +324,17 @@
             "title": "Follow Redirects",
             "type": "boolean"
           },
+          "login_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url"
+          },
           "login_url_pattern": {
             "anyOf": [
               {

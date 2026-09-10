@@ -247,6 +247,9 @@ async def test_rules(
         ping_url=site.ping_url,
         user_agent=site.user_agent,
         ping_method=site.ping_method,
+        # The rule a check consults first is derived from this. Left out, the trial reported on
+        # every rule except the one the site actually leads with.
+        login_url=payload.login_url,
         login_url_pattern=payload.login_url_pattern,
         success_pattern=payload.success_pattern,
         failure_pattern=payload.failure_pattern,

@@ -1280,3 +1280,54 @@ describe("the escape hatch under Advanced", () => {
     expect(sent[0]!.login_url_pattern).toBeNull();
   });
 });
+
+describe("trying the derived rule", () => {
+  it("sends the login URL, since a check derives its first rule from it", async () => {
+    // Left out, the trial reported on every rule except the one the site leads with.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post("/api/sites/1/test-rules", async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({
+          works: true,
+          live_outcome: "ok",
+          live_detail: null,
+          dead_outcome: "login_expired",
+          dead_detail: null,
+          rules: [],
+        });
+      }),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.login_url).toBe("https://example.org/login.php");
+  });
+
+  it("reports it beside the field it is derived from", async () => {
+    server.use(
+      http.post("/api/sites/1/test-rules", () =>
+        HttpResponse.json({
+          works: false,
+          live_outcome: "ok",
+          live_detail: null,
+          dead_outcome: "ok",
+          dead_detail: null,
+          rules: [{ rule: "login_url_pattern", on_live: false, on_dead: false, helps: false }],
+        }),
+      ),
+    );
+    render(<Sites />);
+    await screen.findByText("example");
+    const form = await openTab(/Spotting a dead session/);
+
+    await userEvent.click(form.getByRole("button", { name: "Try these rules" }));
+
+    expect(await form.findByText("Ends up at the login page")).toBeInTheDocument();
+    expect(form.getByText(/never matched either page/)).toBeInTheDocument();
+  });
+});
