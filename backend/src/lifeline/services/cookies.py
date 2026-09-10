@@ -460,3 +460,44 @@ def storage_names(state: StorageState) -> list[str]:
             for item in origin.get("localStorage", [])
         }
     )
+
+
+def differs(before: StorageState, after: StorageState) -> bool:
+    """Whether anything the session consists of has changed.
+
+    Cookies were once the whole of it, so a browser ping decided it had been handed a new session
+    by comparing those alone — and a site keeping its token in local storage sets none, which made
+    every such ping look like nothing had changed. A token reissued on the way past was thrown
+    away, which is the failure the write-back exists to prevent, for the other place a session is
+    kept.
+
+    Deliberately unfussy about what counts: an analytics cookie appearing is reported as a change,
+    and storing it again costs one encryption. Missing a reissued token costs the login.
+    """
+    return _fingerprint(before) != _fingerprint(after)
+
+
+def _fingerprint(state: StorageState) -> tuple[object, object]:
+    """Everything about a session that being handed a new one would change."""
+    cookies = sorted(
+        (
+            cookie["name"],
+            cookie.get("domain", ""),
+            cookie.get("path", ""),
+            cookie.get("value", ""),
+        )
+        for cookie in state["cookies"]
+    )
+    stored = sorted(
+        (
+            origin["origin"],
+            tuple(
+                sorted(
+                    (item["name"], item.get("value", ""))
+                    for item in origin.get("localStorage", [])
+                )
+            ),
+        )
+        for origin in state["origins"]
+    )
+    return cookies, stored

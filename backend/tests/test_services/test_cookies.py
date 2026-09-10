@@ -11,6 +11,7 @@ from lifeline.services.cookies import (
     CookieParseError,
     cookie_names,
     default_domain_for,
+    differs,
     empty_state,
     expires_at,
     for_host,
@@ -494,3 +495,58 @@ class TestNamingWhatIsStored:
 
     def test_reports_nothing_for_a_session_of_cookies_alone(self) -> None:
         assert storage_names(state_with(name="session")) == []
+
+
+class TestNoticingANewSession:
+    """Whether a ping was handed something different from what it sent."""
+
+    def stored(self, token: str = "first") -> dict:
+        # The shape of a site that keeps its session in local storage and sets no cookie at all.
+        return {
+            "cookies": [],
+            "origins": [
+                {
+                    "origin": "https://app.example",
+                    "localStorage": [{"name": "auth.token", "value": token}],
+                }
+            ],
+        }
+
+    def test_notices_a_reissued_token_where_there_are_no_cookies(self) -> None:
+        # Comparing cookies alone said nothing had changed on every single ping, so a token handed
+        # over on the way past was thrown away — the failure the write-back exists to prevent.
+        assert differs(self.stored("first"), self.stored("second")) is True
+
+    def test_says_nothing_changed_when_nothing_did(self) -> None:
+        assert differs(self.stored(), self.stored()) is False
+
+    def test_notices_a_new_key_appearing(self) -> None:
+        after = self.stored()
+        after["origins"][0]["localStorage"].append({"name": "auth.settings", "value": "{}"})
+
+        assert differs(self.stored(), after) is True
+
+    def test_notices_a_cookie_changing_value(self) -> None:
+        before = state_with(name="session", value="old")
+        after = state_with(name="session", value="new")
+
+        assert differs(before, after) is True
+
+    def test_notices_a_cookie_moving_domain(self) -> None:
+        # Same name and value, different scope: a different cookie, and worth storing.
+        before = state_with(name="session", domain="a.example")
+        after = state_with(name="session", domain="b.example")
+
+        assert differs(before, after) is True
+
+    def test_ignores_the_order_things_come_back_in(self) -> None:
+        before = {"cookies": [], "origins": [
+            {"origin": "https://app.example", "localStorage": [
+                {"name": "b", "value": "2"}, {"name": "a", "value": "1"}]}
+        ]}
+        after = {"cookies": [], "origins": [
+            {"origin": "https://app.example", "localStorage": [
+                {"name": "a", "value": "1"}, {"name": "b", "value": "2"}]}
+        ]}
+
+        assert differs(before, after) is False

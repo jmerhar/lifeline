@@ -44,6 +44,17 @@ logger = logging.getLogger(__name__)
 _LOGGED_OUT_STATUSES = (SiteStatus.LAPSED,)
 
 
+def _describe(stored: SiteSession, state: StorageState) -> None:
+    """Record what a session holds and when it runs out, without re-encrypting it.
+
+    Kept apart from writing the session itself, because it is also the whole of what a check that
+    changed nothing still has to bring up to date.
+    """
+    stored.expires_at = expires_at(state)
+    stored.cookie_names = ",".join(cookie_names(state))
+    stored.storage_names = ",".join(storage_names(state))
+
+
 def _hosts_of(site: Site) -> list[str]:
     """Every host a site legitimately keeps a session on.
 
@@ -177,11 +188,12 @@ class CheckRunner:
                 site.session.expires_at,
             )
         elif site.session is not None and state is not None:
-            # Nothing was reissued, so there is nothing to re-encrypt — but the expiry still has
-            # to be right, since it is one of the two clocks that decide whether this site gets
-            # warned about. A site that never rotates its cookies would otherwise keep whatever
-            # was computed the day it was captured, or nothing at all.
-            site.session.expires_at = expires_at(state)
+            # Nothing was reissued, so there is nothing to re-encrypt — but what is recorded
+            # *about* the session still has to be right. The expiry is one of the two clocks that
+            # decide whether this site gets warned about, and the rest is what the interface shows
+            # somebody deciding whether to log in again; both would otherwise keep whatever was
+            # true on the day it was captured, or nothing at all.
+            _describe(site.session, state)
         return check
 
     def _save_state(self, site: Site, stored: SiteSession, state: StorageState) -> StorageState:
@@ -217,9 +229,7 @@ class CheckRunner:
             )
         state = scoped
         stored.state = self._cipher.encrypt_json(state)
-        stored.expires_at = expires_at(state)
-        stored.cookie_names = ",".join(cookie_names(state))
-        stored.storage_names = ",".join(storage_names(state))
+        _describe(stored, state)
         return state
 
     def _apply(

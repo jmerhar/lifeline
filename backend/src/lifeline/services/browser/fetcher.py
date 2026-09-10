@@ -2,7 +2,7 @@
 
 from ...models import Site
 from ..checker import MAX_BODY_CHARS, FetchResult
-from ..cookies import StorageState, cookie_names
+from ..cookies import StorageState, differs
 from .manager import BrowserManager
 
 
@@ -19,17 +19,12 @@ class BrowserFetcher:
 
     async def fetch(self, site: Site, state: StorageState) -> FetchResult:
         result = await self._manager.fetch(site.ping_url, state, site.user_agent)
-        # A browser merges Set-Cookie into its own jar as it navigates, so the state it
-        # hands back already carries any rotation; "rotated" is decided by comparing what
-        # is in it against what went in.
-        rotated = cookie_names(result.state) != cookie_names(state) or any(
-            before.get("value") != after.get("value")
-            for before, after in zip(
-                sorted(state["cookies"], key=lambda cookie: cookie["name"]),
-                sorted(result.state["cookies"], key=lambda cookie: cookie["name"]),
-                strict=False,
-            )
-        )
+        # A browser folds whatever the page was handed into its own storage as it navigates, so
+        # the state it gives back already carries any reissued session; whether one arrived is
+        # decided by comparing it against what went in. Everything counts, not only the cookies:
+        # a site that keeps its token in local storage sets none at all, and comparing those alone
+        # said nothing had changed every single time.
+        rotated = differs(state, result.state)
         return FetchResult(
             status_code=result.status_code,
             final_url=result.final_url,

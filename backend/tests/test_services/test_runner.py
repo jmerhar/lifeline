@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from lifeline.models import CaptureMethod, Check, CheckOutcome, Site, SiteStatus
+from lifeline.models import CaptureMethod, Check, CheckOutcome, Site, SiteSession, SiteStatus
 from lifeline.services.crypto import Cipher
 from lifeline.services.runner import CheckRunner
 from lifeline.services.store import load_settings_row
@@ -699,3 +699,54 @@ class TestASessionThatNeverExisted:
         await runner.run(logged_in_site.id, now=NOW)
 
         assert len(sender.sent) == 1
+
+
+class TestKeepingTheDescriptionCurrent:
+    """What is recorded about a session, when the session itself did not change."""
+
+    STORED = {
+        "cookies": [],
+        "origins": [
+            {
+                "origin": "https://example.org",
+                "localStorage": [
+                    {"name": "auth.token", "value": "t"},
+                    {"name": "auth.settings", "value": "{}"},
+                ],
+            }
+        ],
+    }
+
+    async def test_records_what_a_session_holds_after_a_check_that_changed_nothing(
+        self, db: AsyncSession, cipher: Cipher, site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # A site whose session lives in local storage is written back only when something changed,
+        # which for one that sets no cookies had never happened — so this stayed empty for ever.
+        site.session = SiteSession(
+            state=cipher.encrypt_json(self.STORED),
+            captured_via=CaptureMethod.BROWSER,
+            captured_at=NOW,
+        )
+        await db.commit()
+
+        await make_runner(make_fetch_result(rotated=False)).run(site.id, now=NOW)
+
+        stored = (await reload(db, site)).session
+        assert stored.storage_names == "auth.settings,auth.token"
+
+    async def test_leaves_the_session_itself_untouched(
+        self, db: AsyncSession, cipher: Cipher, site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        site.session = SiteSession(
+            state=cipher.encrypt_json(self.STORED),
+            captured_via=CaptureMethod.BROWSER,
+            captured_at=NOW,
+        )
+        await db.commit()
+        original = site.session.state
+
+        await make_runner(make_fetch_result(rotated=False)).run(site.id, now=NOW)
+
+        stored = (await reload(db, site)).session
+        assert stored.state == original
+        assert stored.rotated_at is None
