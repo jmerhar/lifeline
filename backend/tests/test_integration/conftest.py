@@ -20,6 +20,29 @@ DISPLAY_ENV = "LIFELINE_TEST_DISPLAY"
 LOGGED_IN_BODY = b"<html><body>Logged in as jure. <a href='/logout'>Log out</a></body></html>"
 LOGGED_OUT_BODY = b"<html><body><form>Enter your password</form></body></html>"
 
+# An empty shell that builds its page in the browser and then changes the URL, the way a
+# single-page application does. Nothing here is in the served markup: a fetch that reads the
+# document as soon as it parses sees an empty <div> and the address it asked for.
+#
+# Every phrase is assembled from fragments so that none of them appears in the markup as it is
+# served. A page's own source is part of what a fetch returns, so a test looking for text the
+# script mentions passes without the script ever having run — which is how two of these first
+# went green against a driver that could not see rendered content at all.
+#
+# The delay stands in for the cost of a real framework starting up — fetching and parsing its
+# bundle, deciding whether there is a session, and only then routing. A shorter one is passed by
+# accident, which is how this went unnoticed: the difference appears late, not immediately.
+SHELL_BODY = b"""<html><body><div id="app"></div><script>
+setTimeout(function () {
+  var signedIn = document.cookie.indexOf('session=') !== -1;
+  var words = signedIn
+    ? ['Log', 'ged in as jure. Log ', 'out']
+    : ['Please log', 'in. Pass', 'word reset'];
+  document.getElementById('app').textContent = words.join('');
+  if (!signedIn) history.pushState({}, '', '/auth/signin');
+}, 1500);
+</script></body></html>"""
+
 
 class SiteHandler(BaseHTTPRequestHandler):
     """A site that tells logged-in from logged-out by cookie, and rotates its session.
@@ -40,6 +63,13 @@ class SiteHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             self.wfile.write(b"<html>no such page</html>")
+            return
+
+        if self.path.startswith("/app") or self.path == "/auth/signin":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(SHELL_BODY)
             return
 
         logged_in = "session=original" in cookies or "session=rotated" in cookies

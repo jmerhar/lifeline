@@ -89,6 +89,46 @@ class Driver(Protocol):
     ) -> PageResult: ...
 
 
+# How long to let a page finish building itself before reading it. The whole point of a browser
+# ping is the document the JavaScript produces, and a framework has to fetch its bundle, decide
+# whether there is a session, and route before any of that exists — none of which has happened by
+# the time the served markup has parsed.
+SETTLE_SECONDS = 15.0
+
+# Two things have to be true before a page is worth reading: it is showing something, and it has
+# stopped changing. Either test alone is satisfied by an empty shell — which has no text but is
+# perfectly stable, and stops fetching the moment its bundle has arrived — so the wait is for
+# both. Counted in polls rather than seconds so a page that renders quickly is not held up.
+_SETTLED = """
+() => {
+  const text = document.body ? document.body.innerText.trim().length : 0;
+  const seen = (window.__lifelineSettle ||= { length: -1, unchanged: 0 });
+  if (text === 0) { seen.length = -1; seen.unchanged = 0; return false; }
+  if (text === seen.length) { seen.unchanged += 1; }
+  else { seen.length = text; seen.unchanged = 0; }
+  return seen.unchanged >= 2;
+}
+"""
+_POLL_MS = 250
+
+
+async def _settle(page: Any) -> None:
+    """Wait for the page to show something and stop changing, tolerating one that never does.
+
+    A page that animates, polls on a timer or holds a socket open never stops changing, and is
+    not broken for it — so the wait is bounded and a timeout is not an error. What it costs in
+    that case is the budget above, once, on a check that opted into a browser.
+    """
+    from playwright.async_api import Error as PlaywrightError
+
+    try:
+        await page.wait_for_function(
+            _SETTLED, timeout=SETTLE_SECONDS * 1000, polling=_POLL_MS
+        )
+    except PlaywrightError:
+        logger.debug("page never settled; reading it as it stands")
+
+
 class _PlaywrightBrowser:
     """A headful persistent context, plus the machinery needed to shut it down."""
 
@@ -223,10 +263,14 @@ class PlaywrightDriver:
                 response = await page.goto(
                     url, wait_until="domcontentloaded", timeout=timeout_seconds * 1000
                 )
+                await _settle(page)
+                # Read after settling, and the URL last of the three: a page that routes in the
+                # browser changes its address as part of building itself.
+                body = await page.content()
                 return _PageResult(
                     status_code=response.status if response else 0,
                     final_url=page.url,
-                    body=await page.content(),
+                    body=body,
                     state=await context.storage_state(),
                 )
             finally:

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from lifeline.services.browser.driver import PlaywrightDriver
 from lifeline.services.cookies import StorageState
 
@@ -151,3 +153,56 @@ class TestHeadfulLogin:
             await browser.close()
 
         assert agent and "Mozilla" in agent
+
+
+class TestAPageBuiltInTheBrowser:
+    """A single-page application puts nothing in its served markup.
+
+    Reading the document as soon as it parses sees an empty shell and the address that was asked
+    for, which is indistinguishable signed in or out — the exact reason a real site of this kind
+    reported that its two pages looked identical.
+    """
+
+    async def test_reads_the_document_the_javascript_built(
+        self, chromium_available: bool, site_server: str
+    ) -> None:
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+
+        result = await PlaywrightDriver().fetch(
+            f"{site_server}/app",
+            {"cookies": [], "origins": []},
+            None,
+            timeout_seconds=20,
+        )
+
+        assert "Please login" in result.body
+        assert "Password reset" in result.body
+
+    async def test_follows_the_route_the_javascript_navigated_to(
+        self, chromium_available: bool, site_server: str
+    ) -> None:
+        # Client-side routing changes the URL only once the application has run, so a URL rule
+        # cannot match until then.
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+
+        result = await PlaywrightDriver().fetch(
+            f"{site_server}/app",
+            {"cookies": [], "origins": []},
+            None,
+            timeout_seconds=20,
+        )
+
+        assert result.final_url.endswith("/auth/signin")
+
+    async def test_tells_a_signed_in_shell_from_a_signed_out_one(
+        self, chromium_available: bool, site_server: str
+    ) -> None:
+        if not chromium_available:
+            pytest.skip("Chromium is not installed")
+        result = await PlaywrightDriver().fetch(
+            f"{site_server}/app", state_for(site_server), None, timeout_seconds=20
+        )
+
+        assert "Log out" in result.body
