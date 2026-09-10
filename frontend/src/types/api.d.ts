@@ -484,8 +484,6 @@ export interface components {
             failure_pattern?: string | null;
             /** Login Url */
             login_url?: string | null;
-            /** Login Url Pattern */
-            login_url_pattern?: string | null;
             /**
              * Notes
              * @default []

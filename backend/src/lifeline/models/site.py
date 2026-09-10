@@ -1,7 +1,9 @@
 """A site whose login session is being kept alive."""
 
+import re
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -92,3 +94,27 @@ class Site(Base, TimestampMixin):
     def effective_login_url(self) -> str:
         """Where to open the browser for an interactive login."""
         return self.login_url or self.ping_url
+
+    @property
+    def effective_login_url_pattern(self) -> str | None:
+        """What decides whether a ping ended up on this site's login page.
+
+        Derived from the login URL rather than asked for, because it is that URL's path in every
+        case anyone would write by hand — and asking produced a rule that silently did nothing
+        whenever the answer was "this site does not redirect anywhere".
+
+        Escaped, so it means exactly the path and not a pattern that happens to resemble it. The
+        stored value overrides it, for a site that sends a signed-out request somewhere other than
+        the page you log in on.
+
+        None when the login URL is the pinged page: a rule matching where the ping already
+        finishes would report a working session as dead on every check.
+        """
+        if self.login_url_pattern:
+            return self.login_url_pattern
+        if not self.login_url:
+            return None
+        path = urlsplit(self.login_url).path
+        if not path or path == urlsplit(self.ping_url).path:
+            return None
+        return re.escape(path)

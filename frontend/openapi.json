@@ -151,17 +151,6 @@
             ],
             "title": "Login Url"
           },
-          "login_url_pattern": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Login Url Pattern"
-          },
           "notes": {
             "default": [],
             "items": {

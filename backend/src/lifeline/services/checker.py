@@ -85,10 +85,11 @@ def decide(site: Site, result: FetchResult) -> Verdict:
     checked before the status code — otherwise a site whose login page renders with the
     expected status would be reported as healthy.
     """
-    if site.login_url_pattern and matches(site.login_url_pattern, result.final_url):
+    pattern = site.effective_login_url_pattern
+    if pattern and matches(pattern, result.final_url):
         return Verdict(
             CheckOutcome.LOGIN_EXPIRED,
-            f"request ended at {result.final_url}, which matches the site's login page",
+            f"request ended at {result.final_url}, which is the site's login page",
         )
 
     if result.status_code != site.expected_status:

@@ -188,8 +188,8 @@ class DetectedRules(BaseModel):
     """
 
     # Where to open a browser for the next login, being where a request with no session landed.
+    # What decides a check follows from this, so no pattern is offered alongside it.
     login_url: str | None = None
-    login_url_pattern: str | None = None
     success_pattern: str | None = None
     failure_pattern: str | None = None
     # One sentence per thing found, and one saying what to do when nothing was.

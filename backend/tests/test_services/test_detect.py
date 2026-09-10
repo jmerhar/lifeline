@@ -18,40 +18,29 @@ def probe(body: str, *, url: str = "https://example.org/home", status: int = 200
 
 
 class TestTheRedirectSignal:
-    def test_takes_the_last_path_segment_of_where_it_landed(self) -> None:
+    def test_reports_where_a_signed_out_request_was_sent(self) -> None:
         found = compare(
             probe(SIGNED_IN),
             probe(SIGNED_OUT, url="https://example.org/login.php?return=%2Fhome"),
         )
 
-        assert found.login_url_pattern == "login.php"
+        assert found.login_url == "https://example.org/login.php"
 
     def test_says_why_in_a_sentence_someone_can_read(self) -> None:
         found = compare(probe(SIGNED_IN), probe(SIGNED_OUT, url="https://example.org/login.php"))
 
         assert any("ends at https://example.org/login.php" in note for note in found.notes)
 
-    def test_falls_back_to_the_path_when_the_segment_is_shared(self) -> None:
-        # Both end at .../index.php, distinguished only by the directory.
-        found = compare(
-            probe(SIGNED_IN, url="https://example.org/members/index.php"),
-            probe(SIGNED_OUT, url="https://example.org/account/index.php"),
-        )
+    def test_says_it_needs_nothing_else_filled_in(self) -> None:
+        # What decides a check follows from the login URL, so there is no pattern to write down.
+        found = compare(probe(SIGNED_IN), probe(SIGNED_OUT, url="https://example.org/login.php"))
 
-        assert found.login_url_pattern == "/account/index.php"
-
-    def test_falls_back_to_the_whole_url_when_only_the_query_differs(self) -> None:
-        found = compare(
-            probe(SIGNED_IN, url="https://example.org/home"),
-            probe(SIGNED_OUT, url="https://example.org/home?next=login"),
-        )
-
-        assert found.login_url_pattern == "https://example.org/home?next=login"
+        assert any("nothing else has to be filled in" in note for note in found.notes)
 
     def test_says_nothing_when_both_land_in_the_same_place(self) -> None:
         found = compare(probe(SIGNED_IN), probe(SIGNED_OUT))
 
-        assert found.login_url_pattern is None
+        assert found.login_url is None
 
 
 class TestTheTextSignals:
@@ -166,11 +155,10 @@ class TestTheLoginUrl:
     def test_reports_nothing_when_the_request_did_not_move(self) -> None:
         assert compare(probe(SIGNED_IN), probe(SIGNED_OUT)).login_url is None
 
-    def test_is_not_on_its_own_a_way_to_judge_a_page(self) -> None:
-        # It says where to open a browser, not how to tell a live session from a dead one.
-        # Asserted on the value directly: a redirect always yields a pattern as well, so no pair
-        # of pages produces this state — the distinction is in what the property counts.
-        assert Detected(login_url="https://example.org/login").found_anything is False
+    def test_counts_on_its_own_as_a_way_to_judge_a_page(self) -> None:
+        # A signed-out request being sent elsewhere is enough by itself, and is the signal a check
+        # consults first — so a comparison that found only this has found something.
+        assert Detected(login_url="https://example.org/login").found_anything is True
 
 
 class TestABrowserRenderedSite:
@@ -304,6 +292,7 @@ class TestWhatEachRuleDid:
 
     def rules(self, **overrides: object) -> Site:
         values: dict[str, object] = {
+            "login_url": None,
             "login_url_pattern": None,
             "success_pattern": None,
             "failure_pattern": None,

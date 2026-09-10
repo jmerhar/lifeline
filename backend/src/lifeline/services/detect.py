@@ -78,7 +78,6 @@ class Detected:
 
     # Where a request with no session ends up, which is the site's login page by definition.
     login_url: str | None = None
-    login_url_pattern: str | None = None
     success_pattern: str | None = None
     failure_pattern: str | None = None
     # Plain sentences for the interface: what was found, and what was not.
@@ -86,11 +85,12 @@ class Detected:
 
     @property
     def found_anything(self) -> bool:
-        """Whether the pair produced a rule at all.
+        """Whether the pair produced anything a check can judge by.
 
-        The login URL is not counted: it says where to open a browser, not how to judge a page.
+        The login URL counts: a signed-out request ending somewhere else is by itself enough to
+        tell the two apart, and is the signal a check consults first.
         """
-        return any((self.login_url_pattern, self.success_pattern, self.failure_pattern))
+        return any((self.login_url, self.success_pattern, self.failure_pattern))
 
 
 class Detector:
@@ -151,11 +151,13 @@ def compare(signed_in: Probe, signed_out: Probe) -> Detected:
     found = Detected()
 
     if signed_out.final_url != signed_in.final_url:
+        # The login URL only. What decides a check follows from it, so filling in a pattern as
+        # well would be two places to keep in step and one more thing to have to understand.
         found.login_url = _without_query(signed_out.final_url)
-        found.login_url_pattern = _distinctive_part(signed_out.final_url, signed_in.final_url)
         found.notes.append(
             f"Signed out, the request ends at {signed_out.final_url} instead of "
-            f"{signed_in.final_url}. That is the most reliable signal there is."
+            f"{signed_in.final_url}. That is the most reliable signal there is, and is used "
+            f"on its own — nothing else has to be filled in for it."
         )
 
     found.success_pattern = _only_in(SIGNED_IN_MARKERS, signed_in.body, signed_out.body)
@@ -210,24 +212,6 @@ def _without_query(url: str) -> str:
     """
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}{parts.path}"
-
-
-def _distinctive_part(landed: str, expected: str) -> str:
-    """The shortest part of ``landed`` that will not also match ``expected``.
-
-    A whole URL works as a pattern but reads as noise and breaks the moment the site appends a
-    query parameter, so the last path segment is preferred — "login.php" rather than
-    "https://example.org/login.php?return=%2Fhome". The full path is the fallback for a URL
-    whose last segment is something unhelpfully common, and the whole URL for one with no path
-    to speak of.
-    """
-    path = urlsplit(landed).path
-    segment = path.rstrip("/").rsplit("/", maxsplit=1)[-1]
-    if segment and segment not in expected:
-        return segment
-    if path and path not in expected:
-        return path
-    return landed
 
 
 @dataclass(frozen=True)
@@ -289,13 +273,15 @@ def verify(site: Site, signed_in: Probe, signed_out: Probe) -> Trial:
 def _each_rule(site: Site, signed_in: Probe, signed_out: Probe) -> tuple[RuleOutcome, ...]:
     """What every rule that is set did, independently of the order they are consulted in."""
     found: list[RuleOutcome] = []
-    # Matched against where the request ended up, not against the page.
-    if site.login_url_pattern:
+    # Matched against where the request ended up, not against the page. The effective rule, so
+    # what is reported is what a check will actually consult — usually derived from the login URL.
+    pattern = site.effective_login_url_pattern
+    if pattern:
         found.append(
             _outcome(
                 "login_url_pattern",
-                on_live=matches(site.login_url_pattern, signed_in.final_url),
-                on_dead=matches(site.login_url_pattern, signed_out.final_url),
+                on_live=matches(pattern, signed_in.final_url),
+                on_dead=matches(pattern, signed_out.final_url),
                 wanted_on_dead=True,
             )
         )

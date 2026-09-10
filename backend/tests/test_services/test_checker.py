@@ -388,3 +388,71 @@ class TestIsAtRisk:
         site.last_ok_at = NOW - timedelta(days=95)
 
         assert is_at_risk(site, make_settings(warning_lead_days=7), now=NOW) is not None
+
+
+class TestTheDerivedLoginUrlRule:
+    """Landing on the login page is worked out from the login URL, not asked for separately."""
+
+    def test_a_ping_that_ends_on_the_login_page_is_a_dead_session(self) -> None:
+        site = make_site(
+            ping_url="https://example.org/browse", login_url="https://example.org/auth/signin"
+        )
+
+        verdict = decide(site, make_fetch_result(final_url="https://example.org/auth/signin"))
+
+        assert verdict.outcome is CheckOutcome.LOGIN_EXPIRED
+
+    def test_ignores_the_query_a_redirect_adds(self) -> None:
+        site = make_site(
+            ping_url="https://example.org/browse", login_url="https://example.org/login.php"
+        )
+
+        verdict = decide(
+            site, make_fetch_result(final_url="https://example.org/login.php?return=%2Fbrowse")
+        )
+
+        assert verdict.outcome is CheckOutcome.LOGIN_EXPIRED
+
+    def test_says_nothing_for_a_site_that_does_not_redirect(self) -> None:
+        # The ping finishes where it started, which is the common case, and the rule is inert.
+        site = make_site(ping_url="https://example.org/", login_url="https://example.org/login.php")
+
+        verdict = decide(site, make_fetch_result(final_url="https://example.org/"))
+
+        assert verdict.outcome is CheckOutcome.OK
+
+    def test_never_derives_a_rule_matching_the_pinged_page(self) -> None:
+        # A login URL that is the page being pinged would otherwise report a dead session on
+        # every check, for ever.
+        site = make_site(ping_url="https://example.org/in", login_url="https://example.org/in")
+
+        assert site.effective_login_url_pattern is None
+        assert decide(site, make_fetch_result(final_url="https://example.org/in")).outcome is (
+            CheckOutcome.OK
+        )
+
+    def test_derives_nothing_without_a_login_url(self) -> None:
+        assert make_site(login_url=None).effective_login_url_pattern is None
+
+    def test_means_the_path_and_not_a_pattern_resembling_it(self) -> None:
+        # "login.php" read as a regex matches "loginXphp" as well; the derived form does not.
+        site = make_site(
+            ping_url="https://example.org/browse", login_url="https://example.org/login.php"
+        )
+
+        verdict = decide(site, make_fetch_result(final_url="https://example.org/loginXphp"))
+
+        assert verdict.outcome is CheckOutcome.OK
+
+    def test_a_stored_pattern_overrides_the_derived_one(self) -> None:
+        # For a site that sends a signed-out request somewhere other than its login page.
+        site = make_site(
+            ping_url="https://example.org/browse",
+            login_url="https://example.org/login.php",
+            login_url_pattern="session-expired",
+        )
+
+        assert site.effective_login_url_pattern == "session-expired"
+        assert decide(
+            site, make_fetch_result(final_url="https://example.org/session-expired")
+        ).outcome is CheckOutcome.LOGIN_EXPIRED

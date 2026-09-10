@@ -545,7 +545,7 @@ class TestLogging:
 
         joined = "\n".join(caplog.messages)
         assert "ended at https://example.org/login.php" in joined
-        assert "matches the site's login page" in joined
+        assert "is the site's login page" in joined
 
     async def test_debug_never_records_a_cookie_value(
         self,
