@@ -1399,3 +1399,67 @@ describe("a number field that can be cleared", () => {
     expect(sent[0]!.inactivity_limit_days).toBeNull();
   });
 });
+
+describe("an interval with no room in it", () => {
+  /** A site whose session was granted for `days` and is checked every `interval` days. */
+  function site(days: number, interval: number) {
+    const captured = new Date("2026-09-01T00:00:00Z");
+    const expires = new Date(captured.getTime() + days * 86_400_000);
+    return makeSite({
+      interval_days: interval,
+      session: {
+        captured_at: captured.toISOString(),
+        captured_via: "browser",
+        rotated_at: null,
+        expires_at: expires.toISOString(),
+        cookie_names: ["session"],
+        storage_names: [],
+      },
+    });
+  }
+
+  async function open(days: number, interval: number) {
+    server.use(http.get("/api/sites", () => HttpResponse.json([site(days, interval)])));
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    return within(screen.getByRole("dialog"));
+  }
+
+  it("says so when the interval is as long as the session lasts", async () => {
+    // The case that sent an email minutes after a site was added.
+    const form = await open(7, 7);
+
+    expect(form.getByText(/can land after it has expired/)).toBeInTheDocument();
+  });
+
+  it("says nothing when there is room to spare", async () => {
+    const form = await open(7, 5);
+
+    expect(form.queryByText(/can land after it has expired/)).not.toBeInTheDocument();
+  });
+
+  it("says how long the session lasts, so the number can be chosen", async () => {
+    const form = await open(14, 7);
+
+    expect(form.getByText(/session lasts about 14/)).toBeInTheDocument();
+  });
+
+  it("measures the grant, not what is left of it", async () => {
+    // A fortnight's session with two days left is not a two-day session, and an interval has to
+    // fit the grant.
+    const form = await open(14, 10);
+
+    expect(form.queryByText(/can land after it has expired/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing about a site with no session to measure", async () => {
+    server.use(http.get("/api/sites", () => HttpResponse.json([makeSite({ session: null })])));
+    render(<Sites />);
+    await screen.findByText("example");
+    await userEvent.click(screen.getByRole("button", { name: "Edit example" }));
+    const form = within(screen.getByRole("dialog"));
+
+    expect(form.queryByText(/session lasts about/)).not.toBeInTheDocument();
+  });
+});

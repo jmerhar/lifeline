@@ -50,15 +50,22 @@ export function Field({
   label,
   hint,
   error,
+  caution,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string;
+  /** Something to reconsider rather than something wrong: the value is legal but ill-advised. */
+  caution?: string;
   children: ReactNode;
 }) {
   const id = useId();
-  const described = [hint ? `${id}-hint` : null, error ? `${id}-error` : null]
+  const described = [
+    hint ? `${id}-hint` : null,
+    caution ? `${id}-caution` : null,
+    error ? `${id}-error` : null,
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -80,6 +87,11 @@ export function Field({
             })
           : children}
       </div>
+      {caution ? (
+        <span id={`${id}-caution`} className="mt-1 block text-micro text-risk">
+          {caution}
+        </span>
+      ) : null}
       {error ? (
         <span id={`${id}-error`} className="mt-1 block text-micro text-lapsed">
           {error}

@@ -201,7 +201,9 @@ export function SiteForm({
         ) : (
           <>
             <Tabs current={tab} onChange={setTab} />
-            {tab === "site" ? <TheSite draft={draft} set={set} text={text} /> : null}
+            {tab === "site" ? (
+              <TheSite draft={draft} set={set} text={text} sessionDays={sessionDays(site)} />
+            ) : null}
             {tab === "detection" ? (
               <Detection
                 draft={draft}
@@ -256,7 +258,22 @@ function Tabs({ current, onChange }: { current: Tab; onChange: (tab: Tab) => voi
 type Setter = <K extends keyof SiteWrite>(key: K, value: SiteWrite[K]) => void;
 type Text = (value: string) => string | null;
 
-function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Text }) {
+function TheSite({
+  draft,
+  set,
+  text,
+  sessionDays,
+}: {
+  draft: SiteWrite;
+  set: Setter;
+  text: Text;
+  /** How long this site's stored session lasts, when that is known. */
+  sessionDays?: number | null;
+}) {
+  // An interval as long as the session it renews leaves no room: the check meant to refresh it can
+  // fall after it has already gone, which is a warning by email days later rather than a number
+  // corrected here.
+  const tooLong = sessionDays != null && draft.interval_days >= sessionDays;
   return (
     <fieldset className="grid gap-4 sm:grid-cols-2">
       <Field label="Name" hint="Yours to choose. Add a site twice for two accounts.">
@@ -278,7 +295,19 @@ function TheSite({ draft, set, text }: { draft: SiteWrite; set: Setter; text: Te
           {...notACredential}
         />
       </Field>
-      <Field label="Check every" hint="Days between checks.">
+      <Field
+        label="Check every"
+        hint={
+          sessionDays != null
+            ? `Days between checks. This site's session lasts about ${sessionDays}.`
+            : "Days between checks."
+        }
+        caution={
+          tooLong
+            ? "That is as long as the session lasts, so a check can land after it has expired. Leave a day or two spare."
+            : undefined
+        }
+      >
         <NumberInput
           min={1}
           max={365}
@@ -651,6 +680,21 @@ function redirectsElsewhere(draft: SiteWrite): boolean {
  * owner asked for by saving it that way — guessing otherwise overrode a deliberate choice every
  * time the form was reopened.
  */
+/**
+ * How many days a site's stored session lasts, or null when that cannot be told.
+ *
+ * Measured from when the session was last handed over rather than from now, because that is the
+ * window each ping buys — a session with two days left on a fortnight's grant is not a two-day
+ * session, and an interval has to fit the grant.
+ */
+function sessionDays(site: Site | null): number | null {
+  const session = site?.session;
+  if (!session?.expires_at) return null;
+  const from = new Date(session.rotated_at ?? session.captured_at).getTime();
+  const days = Math.round((new Date(session.expires_at).getTime() - from) / 86_400_000);
+  return days > 0 ? days : null;
+}
+
 function watchingFor(site: Site | null): Watching {
   if (site === null) return "no";
   return countSignals(toWrite(site)) > 0 ? "yes" : "no";
