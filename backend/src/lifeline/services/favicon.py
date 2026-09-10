@@ -8,6 +8,7 @@ request to the site being monitored just to draw a list.
 import base64
 import logging
 import re
+import struct
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -32,15 +33,80 @@ def _origin(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
+# An .ico is an archive of the same picture at several sizes, and a site that offers every size
+# up to 256x256 can easily run to a couple of hundred kilobytes — all but a few hundred bytes of
+# which is of no use to a 16-pixel row. Taking one picture out is what makes such a site's icon
+# usable at all, rather than raising the ceiling and carrying the rest of it in every listing.
+_ICO_HEADER = struct.Struct("<HHH")
+_ICO_ENTRY = struct.Struct("<BBBBHHII")
+_ICO_ENTRY_SIZE = _ICO_ENTRY.size
+# The size worth keeping: the list draws icons at 16 pixels, so this is the one that still looks
+# right on a screen that draws two device pixels for each of them.
+_WANTED_PIXELS = 32
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
 def _as_data_uri(content: bytes, content_type: str) -> str | None:
-    if not content or len(content) > MAX_ICON_BYTES:
+    if not content:
         return None
     media_type = content_type.split(";")[0].strip() or "image/x-icon"
     if not media_type.startswith(_IMAGE_TYPES):
         return None
     if media_type == "application/octet-stream":
         media_type = "image/x-icon"
+
+    if len(content) > MAX_ICON_BYTES:
+        one = _one_frame(content)
+        if one is None:
+            return None
+        content, media_type = one
+        if len(content) > MAX_ICON_BYTES:
+            return None
     return f"data:{media_type};base64,{base64.b64encode(content).decode()}"
+
+
+def _one_frame(content: bytes) -> tuple[bytes, str] | None:
+    """One picture out of a multi-size .ico, or None if this is not one.
+
+    Returns a whole PNG where the chosen picture already is one, since modern .ico files embed
+    them and a PNG on its own is both smaller and something every browser draws directly.
+    """
+    frames = _frames(content)
+    if not frames:
+        return None
+    # Closest to the size actually drawn, and the smaller of two equally close ones.
+    width, offset, size = min(
+        frames, key=lambda frame: (abs(frame[0] - _WANTED_PIXELS), frame[2])
+    )
+    data = content[offset : offset + size]
+    if len(data) != size:
+        return None
+    if data.startswith(_PNG_MAGIC):
+        return data, "image/png"
+    entry = _ICO_ENTRY.pack(
+        width % 256, width % 256, 0, 0, 1, 32, len(data), _ICO_HEADER.size + _ICO_ENTRY_SIZE
+    )
+    return _ICO_HEADER.pack(0, 1, 1) + entry + data, "image/x-icon"
+
+
+def _frames(content: bytes) -> list[tuple[int, int, int]]:
+    """Every picture an .ico holds, as (width, offset, size)."""
+    if len(content) < _ICO_HEADER.size:
+        return []
+    reserved, kind, count = _ICO_HEADER.unpack_from(content)
+    if reserved != 0 or kind != 1 or not 0 < count < 256:
+        return []
+    frames = []
+    for index in range(count):
+        start = _ICO_HEADER.size + index * _ICO_ENTRY_SIZE
+        if start + _ICO_ENTRY_SIZE > len(content):
+            break
+        width, _height, _colours, _pad, _planes, _bpp, size, offset = _ICO_ENTRY.unpack_from(
+            content, start
+        )
+        # A zero width means 256 in this format, which is the largest and least wanted.
+        frames.append((width or 256, offset, size))
+    return frames
 
 
 async def fetch(url: str, *, client: httpx.AsyncClient) -> str | None:
