@@ -70,6 +70,7 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     retention_days: 90,
     browser_idle_timeout_minutes: 15,
     log_level: "INFO",
+    accept_language: "en-US,en;q=0.9",
     ...overrides,
   };
 }

@@ -108,7 +108,7 @@ class TestFetching:
 
         respx.get("https://example.org/home").mock(side_effect=record)
 
-        found = await Detector(settings).detect(make_site(), SAMPLE_STATE)
+        found = await Detector(settings).detect(make_site(), SAMPLE_STATE, accept_language="en")
 
         assert len(seen) == 2
         assert seen[0] is not None
@@ -128,7 +128,7 @@ class TestFetching:
 
         result = await Detector(settings).probe(
             make_site(follow_redirects=False), SAMPLE_STATE
-        )
+        , accept_language="en")
 
         assert result.final_url == "https://example.org/login.php"
 
@@ -179,7 +179,7 @@ class TestABrowserRenderedSite:
         respx.get("https://example.org/home").mock(return_value=httpx.Response(200, text=shell))
         site = make_site(ping_method=PingMethod.BROWSER)
 
-        found = await Detector(settings, browser).detect(site, SAMPLE_STATE)
+        found = await Detector(settings, browser).detect(site, SAMPLE_STATE, accept_language="en")
 
         assert fake_driver.fetched == ["https://example.org/home"] * 2
         assert found.success_pattern == "Log out"
@@ -193,7 +193,9 @@ class TestABrowserRenderedSite:
         shell = "<html><div id='app'></div></html>"
         respx.get("https://example.org/home").mock(return_value=httpx.Response(200, text=shell))
 
-        found = await Detector(settings, browser).detect(make_site(), SAMPLE_STATE)
+        found = await Detector(settings, browser).detect(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert found.found_anything is False
 
@@ -201,9 +203,12 @@ class TestABrowserRenderedSite:
         self, settings, browser, fake_driver
     ) -> None:
         await Detector(settings, browser).probe(
-            make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE
+            make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE,
+            accept_language="en",
         )
-        await Detector(settings, browser).probe(make_site(ping_method=PingMethod.BROWSER), None)
+        await Detector(settings, browser).probe(make_site(
+            ping_method=PingMethod.BROWSER), None, accept_language="en"
+        )
 
         assert len(fake_driver.fetched) == 2
 
@@ -211,7 +216,9 @@ class TestABrowserRenderedSite:
         # A detector with no browser behind it must not silently fall back to a plain fetch,
         # which is what made the comparison useless for this kind of site.
         with pytest.raises(BrowserUnavailable):
-            await Detector(settings).probe(make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE)
+            await Detector(settings).probe(make_site(
+                ping_method=PingMethod.BROWSER), SAMPLE_STATE, accept_language="en"
+            )
 
 
 class TestTryingRulesOut:
@@ -391,3 +398,24 @@ class TestBothSpellingsOfTheVerb:
         found = compare(probe(SIGNED_IN), probe(self.ONE_WORD))
 
         assert found.success_pattern == "Log out"
+
+
+class TestTheLanguageTheComparisonAsksFor:
+    """The comparison has to ask the way a check asks, or it reads a different page."""
+
+    @respx.mock
+    async def test_asks_for_the_language_it_was_given(self, settings) -> None:
+        # A site answering in a different language than the person reads is how a comparison
+        # reported that it found nothing on a page full of the very phrases it looks for.
+        route = respx.get("https://example.org/home").respond(200, text=SIGNED_IN)
+
+        await Detector(settings).probe(make_site(), SAMPLE_STATE, accept_language="en-GB,en;q=0.9")
+
+        assert route.calls.last.request.headers["Accept-Language"] == "en-GB,en;q=0.9"
+
+    async def test_a_browser_is_told_the_same(self, settings, browser, fake_driver) -> None:
+        await Detector(settings, browser).probe(
+            make_site(ping_method=PingMethod.BROWSER), SAMPLE_STATE, accept_language="en-GB"
+        )
+
+        assert fake_driver.languages == ["en-GB"]

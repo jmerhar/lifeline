@@ -121,9 +121,14 @@ class StubFetcher:
     def __init__(self, *results: FetchResult | Exception) -> None:
         self._results: list[FetchResult | Exception] = list(results)
         self.calls: list[tuple[Site, StorageState]] = []
+        # What Accept-Language each fetch was asked for.
+        self.languages: list[str] = []
 
-    async def fetch(self, site: Site, state: StorageState) -> FetchResult:
+    async def fetch(
+        self, site: Site, state: StorageState, *, accept_language: str = "en"
+    ) -> FetchResult:
         self.calls.append((site, state))
+        self.languages.append(accept_language)
         result = self._results.pop(0) if len(self._results) > 1 else self._results[0]
         if isinstance(result, Exception):
             raise result
@@ -180,6 +185,7 @@ def make_settings(**overrides: object) -> Setting:
         "warning_lead_days": 7,
         "error_threshold": 3,
         "log_level": "INFO",
+        "accept_language": "en-US,en;q=0.9",
         "default_interval_days": 7,
         "retention_days": 90,
         "browser_idle_timeout_minutes": 15,
@@ -331,6 +337,8 @@ class FakeDriver:
         self.fail = fail
         # Whether each open was asked to start with an empty cookie jar.
         self.signed_out: list[bool] = []
+        # The Accept-Language each headless fetch was asked for.
+        self.languages: list[str | None] = []
 
     async def open_interactive(
         self,
@@ -348,9 +356,16 @@ class FakeDriver:
         return self.browser
 
     async def fetch(
-        self, url: str, state: StorageState, user_agent: str | None, *, timeout_seconds: float
+        self,
+        url: str,
+        state: StorageState,
+        user_agent: str | None,
+        *,
+        timeout_seconds: float,
+        accept_language: str | None = None,
     ) -> object:
         self.fetched.append(url)
+        self.languages.append(accept_language)
 
         class Result:
             status_code = 200

@@ -632,6 +632,11 @@ export interface components {
          */
         SettingsRead: {
             /**
+             * Accept Language
+             * @default en-US,en;q=0.9
+             */
+            accept_language: string;
+            /**
              * Apprise Urls
              * @default
              */
@@ -703,6 +708,11 @@ export interface components {
          * @description The instance settings a client may change.
          */
         SettingsWrite: {
+            /**
+             * Accept Language
+             * @default en-US,en;q=0.9
+             */
+            accept_language: string;
             /**
              * Apprise Urls
              * @default

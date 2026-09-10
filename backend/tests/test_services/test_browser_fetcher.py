@@ -14,7 +14,9 @@ class TestBrowserFetcher:
     async def test_reports_what_the_page_returned(
         self, settings: Settings, fake_driver: FakeDriver
     ) -> None:
-        result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
+        result = await build(settings, fake_driver).fetch(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert result.status_code == 200
         assert result.final_url == "https://example.org/home"
@@ -23,7 +25,9 @@ class TestBrowserFetcher:
     async def test_sees_no_rotation_when_nothing_changed(
         self, settings: Settings, fake_driver: FakeDriver
     ) -> None:
-        result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
+        result = await build(settings, fake_driver).fetch(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert result.rotated is False
 
@@ -37,7 +41,7 @@ class TestBrowserFetcher:
             "origins": [],
         }
 
-        async def fetch(url, state, user_agent, *, timeout_seconds):
+        async def fetch(url, state, user_agent, *, timeout_seconds, accept_language=None):
             class Result:
                 status_code = 200
                 final_url = url
@@ -49,7 +53,9 @@ class TestBrowserFetcher:
 
         fake_driver.fetch = fetch
 
-        result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
+        result = await build(settings, fake_driver).fetch(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert result.rotated is True
 
@@ -64,7 +70,7 @@ class TestBrowserFetcher:
             "origins": [],
         }
 
-        async def fetch(url, state, user_agent, *, timeout_seconds):
+        async def fetch(url, state, user_agent, *, timeout_seconds, accept_language=None):
             class Result:
                 status_code = 200
                 final_url = url
@@ -76,7 +82,9 @@ class TestBrowserFetcher:
 
         fake_driver.fetch = fetch
 
-        result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
+        result = await build(settings, fake_driver).fetch(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert result.rotated is True
 
@@ -85,7 +93,7 @@ class TestBrowserFetcher:
     ) -> None:
         from lifeline.services.checker import MAX_BODY_CHARS
 
-        async def fetch(url, state, user_agent, *, timeout_seconds):
+        async def fetch(url, state, user_agent, *, timeout_seconds, accept_language=None):
             class Result:
                 status_code = 200
                 final_url = url
@@ -97,7 +105,9 @@ class TestBrowserFetcher:
 
         fake_driver.fetch = fetch
 
-        result = await build(settings, fake_driver).fetch(make_site(), SAMPLE_STATE)
+        result = await build(settings, fake_driver).fetch(make_site(
+            ), SAMPLE_STATE, accept_language="en"
+        )
 
         assert len(result.body) == MAX_BODY_CHARS
 

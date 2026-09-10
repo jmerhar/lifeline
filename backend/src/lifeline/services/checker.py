@@ -58,7 +58,9 @@ class Verdict:
 class Fetcher(Protocol):
     """Retrieves a site's ping URL using a stored session."""
 
-    async def fetch(self, site: Site, state: StorageState) -> FetchResult:
+    async def fetch(
+        self, site: Site, state: StorageState, *, accept_language: str
+    ) -> FetchResult:
         """Request ``site.ping_url`` with ``state`` and return what came back."""
         ...
 
@@ -154,8 +156,13 @@ class HttpFetcher:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    async def fetch(self, site: Site, state: StorageState) -> FetchResult:
-        headers = {"User-Agent": site.user_agent or self._settings.default_user_agent}
+    async def fetch(
+        self, site: Site, state: StorageState, *, accept_language: str
+    ) -> FetchResult:
+        headers = {
+            "User-Agent": site.user_agent or self._settings.default_user_agent,
+            "Accept-Language": accept_language,
+        }
         async with httpx.AsyncClient(
             cookies=state_to_jar(state),
             headers=headers,
@@ -187,7 +194,9 @@ class CheckReport:
     rotated: bool
 
 
-async def perform_check(site: Site, state: StorageState | None, fetcher: Fetcher) -> CheckReport:
+async def perform_check(
+    site: Site, state: StorageState | None, fetcher: Fetcher, *, accept_language: str
+) -> CheckReport:
     """Ping ``site`` and report what happened, without touching the database.
 
     A site with no stored session is reported as lapsed rather than as an error: there is
@@ -206,7 +215,7 @@ async def perform_check(site: Site, state: StorageState | None, fetcher: Fetcher
         )
 
     try:
-        result = await fetcher.fetch(site, state)
+        result = await fetcher.fetch(site, state, accept_language=accept_language)
     except httpx.HTTPError as exc:
         # Every network-level failure lands here: DNS, TLS, connect, read timeout. The
         # session is untouched, so it is not reported as lapsed.

@@ -205,7 +205,10 @@ async def detect(site_id: int, db: DbDep, services: ServicesDep) -> DetectedRule
         )
     state = services.cipher.decrypt_json(site.session.state)
     try:
-        found = await services.detector.detect(site, state)
+        row = await load_settings_row(db)
+        found = await services.detector.detect(
+            site, state, accept_language=row.accept_language
+        )
     except BrowserUnavailable as exc:
         # A site set to be checked through a browser is compared through one too, so a
         # deployment without one cannot answer for it at all.
@@ -257,8 +260,13 @@ async def test_rules(
         follow_redirects=payload.follow_redirects,
     )
     try:
-        signed_in = await services.detector.probe(candidate, state)
-        signed_out = await services.detector.probe(candidate, None)
+        row = await load_settings_row(db)
+        signed_in = await services.detector.probe(
+            candidate, state, accept_language=row.accept_language
+        )
+        signed_out = await services.detector.probe(
+            candidate, None, accept_language=row.accept_language
+        )
     except BrowserUnavailable as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)

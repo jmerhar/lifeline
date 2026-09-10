@@ -170,3 +170,38 @@ describe("the log level", () => {
     expect(screen.getByRole("option", { name: /^Debug/ })).toHaveTextContent("why each check");
   });
 })
+
+describe("the language a site is asked to answer in", () => {
+  it("saves what was typed", async () => {
+    // A site serving more than one decides from this, and a pattern typed from a page in one
+    // language matches nothing in another.
+    const sent: Array<Record<string, unknown>> = [];
+    server.use(
+      http.put("/api/settings", async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        sent.push(body);
+        return HttpResponse.json(body);
+      }),
+    );
+    render(<Settings />);
+    const field = await screen.findByLabelText(/Answer in this language/);
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "hu-HU,hu;q=0.9");
+    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.accept_language).toBe("hu-HU,hu;q=0.9");
+  });
+
+  it("shows what is configured", async () => {
+    server.use(
+      http.get("/api/settings", () =>
+        HttpResponse.json(makeSettings({ accept_language: "de-DE,de;q=0.9" })),
+      ),
+    );
+    render(<Settings />);
+
+    expect(await screen.findByLabelText(/Answer in this language/)).toHaveValue("de-DE,de;q=0.9");
+  });
+});

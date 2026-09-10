@@ -100,7 +100,9 @@ class Detector:
         self._settings = settings
         self._browser = browser
 
-    async def probe(self, site: Site, state: StorageState | None) -> Probe:
+    async def probe(
+        self, site: Site, state: StorageState | None, *, accept_language: str
+    ) -> Probe:
         """Fetch the ping URL once, with the given cookies or with none.
 
         Fetched the way the site will actually be checked. A site that builds its page in the
@@ -109,8 +111,11 @@ class Detector:
         uselessly, that the two are identical.
         """
         if site.ping_method is PingMethod.BROWSER:
-            return await self._probe_rendered(site, state)
-        headers = {"User-Agent": site.user_agent or self._settings.default_user_agent}
+            return await self._probe_rendered(site, state, accept_language)
+        headers = {
+            "User-Agent": site.user_agent or self._settings.default_user_agent,
+            "Accept-Language": accept_language,
+        }
         async with httpx.AsyncClient(
             cookies=state_to_jar(state) if state is not None else None,
             headers=headers,
@@ -126,12 +131,17 @@ class Detector:
             body=response.text[:MAX_BODY_CHARS],
         )
 
-    async def _probe_rendered(self, site: Site, state: StorageState | None) -> Probe:
+    async def _probe_rendered(
+        self, site: Site, state: StorageState | None, accept_language: str
+    ) -> Probe:
         """Load the page in a browser and report the document its JavaScript produced."""
         if self._browser is None:
             raise BrowserUnavailable("this deployment cannot render pages in a browser")
         result = await self._browser.fetch(
-            site.ping_url, state or EMPTY_STATE, site.user_agent
+            site.ping_url,
+            state or EMPTY_STATE,
+            site.user_agent,
+            accept_language=accept_language,
         )
         return Probe(
             status_code=result.status_code,
@@ -139,10 +149,10 @@ class Detector:
             body=result.body[:MAX_BODY_CHARS],
         )
 
-    async def detect(self, site: Site, state: StorageState) -> Detected:
+    async def detect(self, site: Site, state: StorageState, *, accept_language: str) -> Detected:
         """Work out the site's rules from a signed-in and a signed-out fetch."""
-        signed_in = await self.probe(site, state)
-        signed_out = await self.probe(site, None)
+        signed_in = await self.probe(site, state, accept_language=accept_language)
+        signed_out = await self.probe(site, None, accept_language=accept_language)
         return compare(signed_in, signed_out)
 
 

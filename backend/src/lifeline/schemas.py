@@ -125,6 +125,9 @@ class SettingsWrite(BaseModel):
     # Constrained to the names the logging module knows, so a typo is refused here rather than
     # silently leaving the level at whatever it was.
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    accept_language: Annotated[str, Field(default="en-US,en;q=0.9", max_length=120)] = (
+        "en-US,en;q=0.9"
+    )
     default_interval_days: Annotated[int, Field(default=7, ge=1, le=365)] = 7
     retention_days: Annotated[int, Field(default=90, ge=0, le=3650)] = 90
     browser_idle_timeout_minutes: Annotated[int, Field(default=15, ge=1, le=240)] = 15

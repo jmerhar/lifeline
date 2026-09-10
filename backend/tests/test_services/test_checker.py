@@ -170,7 +170,7 @@ class TestHttpFetcher:
         route = respx.get("https://example.org/home").respond(200, text="hello")
         site = make_site(user_agent="CapturedAgent/1.0")
 
-        result = await HttpFetcher(settings).fetch(site, SAMPLE_STATE)
+        result = await HttpFetcher(settings).fetch(site, SAMPLE_STATE, accept_language="en")
 
         request = route.calls.last.request
         # The captured agent must be replayed verbatim: a Cloudflare clearance cookie is
@@ -184,7 +184,9 @@ class TestHttpFetcher:
     async def test_falls_back_to_the_default_user_agent(self, settings: Settings) -> None:
         route = respx.get("https://example.org/home").respond(200)
 
-        await HttpFetcher(settings).fetch(make_site(user_agent=None), SAMPLE_STATE)
+        await HttpFetcher(settings).fetch(make_site(
+            user_agent=None), SAMPLE_STATE, accept_language="en"
+        )
 
         assert route.calls.last.request.headers["user-agent"] == settings.default_user_agent
 
@@ -195,7 +197,7 @@ class TestHttpFetcher:
         )
         respx.get("https://example.org/login.php").respond(200, text="sign in")
 
-        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE)
+        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE, accept_language="en")
 
         assert result.final_url == "https://example.org/login.php"
 
@@ -207,7 +209,9 @@ class TestHttpFetcher:
             302, headers={"location": "https://example.org/login.php"}
         )
 
-        result = await HttpFetcher(settings).fetch(make_site(follow_redirects=False), SAMPLE_STATE)
+        result = await HttpFetcher(settings).fetch(make_site(
+            follow_redirects=False), SAMPLE_STATE, accept_language="en"
+        )
 
         assert result.status_code == 302
         assert result.final_url == "https://example.org/home"
@@ -218,7 +222,7 @@ class TestHttpFetcher:
             200, headers={"set-cookie": "session=rotated; Domain=.example.org; Path=/; Secure"}
         )
 
-        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE)
+        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE, accept_language="en")
 
         assert result.rotated is True
         assert result.state["cookies"][0]["value"] == "rotated"
@@ -229,7 +233,7 @@ class TestHttpFetcher:
 
         respx.get("https://example.org/home").respond(200, text="x" * (MAX_BODY_CHARS + 500))
 
-        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE)
+        result = await HttpFetcher(settings).fetch(make_site(), SAMPLE_STATE, accept_language="en")
 
         assert len(result.body) == MAX_BODY_CHARS
 
@@ -237,7 +241,9 @@ class TestHttpFetcher:
 class TestPerformCheck:
     async def test_a_site_with_no_session_is_reported_as_lapsed(self) -> None:
         # Nothing is wrong with the site or the network; someone has to log in.
-        report = await perform_check(make_site(), None, StubFetcher(make_fetch_result()))
+        report = await perform_check(
+            make_site(), None, StubFetcher(make_fetch_result()), accept_language="en"
+        )
 
         assert report.verdict.outcome is CheckOutcome.LOGIN_EXPIRED
         assert "no session" in report.verdict.detail
@@ -246,7 +252,7 @@ class TestPerformCheck:
     async def test_a_network_failure_leaves_the_session_untouched(self) -> None:
         fetcher = StubFetcher(httpx.ConnectTimeout("timed out"))
 
-        report = await perform_check(make_site(), SAMPLE_STATE, fetcher)
+        report = await perform_check(make_site(), SAMPLE_STATE, fetcher, accept_language="en")
 
         assert report.verdict.outcome is CheckOutcome.NETWORK_ERROR
         assert "ConnectTimeout" in report.verdict.detail
@@ -257,14 +263,16 @@ class TestPerformCheck:
     async def test_a_successful_check_returns_the_merged_state(self) -> None:
         fetcher = StubFetcher(make_fetch_result(rotated=True))
 
-        report = await perform_check(make_site(), SAMPLE_STATE, fetcher)
+        report = await perform_check(make_site(), SAMPLE_STATE, fetcher, accept_language="en")
 
         assert report.verdict.outcome is CheckOutcome.OK
         assert report.rotated is True
         assert report.state == SAMPLE_STATE
 
     async def test_records_how_long_the_check_took(self) -> None:
-        report = await perform_check(make_site(), SAMPLE_STATE, StubFetcher(make_fetch_result()))
+        report = await perform_check(
+            make_site(), SAMPLE_STATE, StubFetcher(make_fetch_result()), accept_language="en"
+        )
 
         assert report.duration_ms >= 0
 
@@ -520,3 +528,30 @@ class TestCountingTheDaysLeft:
         reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
 
         assert "0 day(s)" in reason
+
+
+class TestTheLanguageAskedFor:
+    """What a site is told about the language it should answer in."""
+
+    @respx.mock
+    async def test_asks_for_the_configured_language(self, settings: Settings) -> None:
+        # A site serving more than one decides from this. Without it, a page somebody reads in
+        # English arrives in whatever the site prefers — taking every pattern they typed with it.
+        route = respx.get("https://example.org/home").respond(200, text="ok")
+
+        await HttpFetcher(settings).fetch(
+            make_site(), SAMPLE_STATE, accept_language="hu-HU,hu;q=0.9"
+        )
+
+        assert route.calls.last.request.headers["Accept-Language"] == "hu-HU,hu;q=0.9"
+
+    @respx.mock
+    async def test_asks_alongside_the_captured_user_agent(self, settings: Settings) -> None:
+        route = respx.get("https://example.org/home").respond(200, text="ok")
+
+        await HttpFetcher(settings).fetch(
+            make_site(user_agent="Captured/1"), SAMPLE_STATE, accept_language="en-GB"
+        )
+
+        assert route.calls.last.request.headers["User-Agent"] == "Captured/1"
+        assert route.calls.last.request.headers["Accept-Language"] == "en-GB"

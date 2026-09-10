@@ -17,8 +17,12 @@ class BrowserFetcher:
     def __init__(self, manager: BrowserManager) -> None:
         self._manager = manager
 
-    async def fetch(self, site: Site, state: StorageState) -> FetchResult:
-        result = await self._manager.fetch(site.ping_url, state, site.user_agent)
+    async def fetch(
+        self, site: Site, state: StorageState, *, accept_language: str
+    ) -> FetchResult:
+        result = await self._manager.fetch(
+            site.ping_url, state, site.user_agent, accept_language=accept_language
+        )
         # A browser folds whatever the page was handed into its own storage as it navigates, so
         # the state it gives back already carries any reissued session; whether one arrived is
         # decided by comparing it against what went in. Everything counts, not only the cookies:

@@ -87,6 +87,7 @@ class Driver(Protocol):
         user_agent: str | None,
         *,
         timeout_seconds: float,
+        accept_language: str | None = None,
     ) -> PageResult: ...
 
 
@@ -280,6 +281,7 @@ class PlaywrightDriver:
         user_agent: str | None,
         *,
         timeout_seconds: float,
+        accept_language: str | None = None,
     ) -> PageResult:
         """Load ``url`` headlessly with ``state``, and report what came back."""
         from playwright.async_api import async_playwright
@@ -295,7 +297,13 @@ class PlaywrightDriver:
             )
             try:
                 context = await browser.new_context(
-                    storage_state=state, user_agent=user_agent or None
+                    storage_state=state,
+                    user_agent=user_agent or None,
+                    # A header on the context rather than on the request, so it is sent by every
+                    # navigation the page makes on its own as well as by the first one.
+                    extra_http_headers=(
+                        {"Accept-Language": accept_language} if accept_language else {}
+                    ),
                 )
                 page = await context.new_page()
                 response = await page.goto(

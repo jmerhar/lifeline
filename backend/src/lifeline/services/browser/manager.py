@@ -298,11 +298,20 @@ class BrowserManager:
         await self.close()
 
     async def fetch(
-        self, url: str, state: StorageState, user_agent: str | None
+        self,
+        url: str,
+        state: StorageState,
+        user_agent: str | None,
+        *,
+        accept_language: str | None = None,
     ) -> object:
         """Load a page headlessly with a stored session, for a browser-mode ping."""
         if not self._settings.browser_enabled:
             raise BrowserUnavailable("browser checks are disabled in this deployment")
         return await self._driver.fetch(
-            url, state, user_agent, timeout_seconds=self._settings.request_timeout_seconds
+            url,
+            state,
+            user_agent,
+            timeout_seconds=self._settings.request_timeout_seconds,
+            accept_language=accept_language,
         )

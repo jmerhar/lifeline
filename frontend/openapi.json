@@ -477,6 +477,12 @@
       "SettingsRead": {
         "description": "The instance settings, as returned.",
         "properties": {
+          "accept_language": {
+            "default": "en-US,en;q=0.9",
+            "maxLength": 120,
+            "title": "Accept Language",
+            "type": "string"
+          },
           "apprise_urls": {
             "default": "",
             "title": "Apprise Urls",
@@ -567,6 +573,12 @@
       "SettingsWrite": {
         "description": "The instance settings a client may change.",
         "properties": {
+          "accept_language": {
+            "default": "en-US,en;q=0.9",
+            "maxLength": 120,
+            "title": "Accept Language",
+            "type": "string"
+          },
           "apprise_urls": {
             "default": "",
             "title": "Apprise Urls",

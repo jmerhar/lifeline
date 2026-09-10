@@ -179,6 +179,17 @@ export function Settings() {
             />
           </Field>
           <Field
+            label="Answer in this language"
+            hint="Sent with every check as Accept-Language. A site serving more than one decides from this, and patterns typed from a page in one language will not match another."
+          >
+            <Input
+              value={draft.accept_language}
+              onChange={(event) => set("accept_language", event.target.value)}
+              placeholder="en-US,en;q=0.9"
+              spellCheck={false}
+            />
+          </Field>
+          <Field
             label="Log detail"
             hint="Takes effect at once. Written to logs/lifeline.log beside the database, and to the container's output."
           >

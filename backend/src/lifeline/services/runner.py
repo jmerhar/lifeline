@@ -127,7 +127,12 @@ class CheckRunner:
                     rotated=False,
                 )
             else:
-                report = await perform_check(site, state, self._fetcher_for(site))
+                report = await perform_check(
+                    site,
+                    state,
+                    self._fetcher_for(site),
+                    accept_language=settings_row.accept_language,
+                )
 
             check = self._record(session, site, report, now, state)
             events = self._apply(site, report, settings_row, now)

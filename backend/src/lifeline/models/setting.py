@@ -46,6 +46,12 @@ class Setting(Base, TimestampMixin):
     # container to get it discards whatever was interesting.
     log_level: Mapped[str] = mapped_column(String(10), default="INFO")
 
+    # Sent with every check, and with the comparison that works a site's rules out. A site with
+    # more than one language decides from this which to answer in, and without it answers in
+    # whichever it prefers — which is how a page a person reads in English arrives in Hungarian,
+    # taking every pattern they typed with it.
+    accept_language: Mapped[str] = mapped_column(String(120), default="en-US,en;q=0.9")
+
     default_interval_days: Mapped[int] = mapped_column(Integer, default=7)
     retention_days: Mapped[int] = mapped_column(Integer, default=90)
     # A login session left open holds a browser and an X server; this closes it.
