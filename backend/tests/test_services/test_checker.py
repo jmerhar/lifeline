@@ -7,7 +7,7 @@ import httpx
 import respx
 
 from lifeline.config import Settings
-from lifeline.models import CheckOutcome, SiteSession
+from lifeline.models import CheckOutcome, Site, SiteSession
 from lifeline.services.checker import (
     RETRY_BASE,
     HttpFetcher,
@@ -456,3 +456,67 @@ class TestTheDerivedLoginUrlRule:
         assert decide(
             site, make_fetch_result(final_url="https://example.org/session-expired")
         ).outcome is CheckOutcome.LOGIN_EXPIRED
+
+
+class TestJitterNeverDelaysACheck:
+    """An interval is the longest anyone is willing to wait, not an average to scatter around."""
+
+    def spread(self, site: Site, draws: int = 200) -> list[datetime]:
+        return [
+            next_check_time(site, CheckOutcome.OK, now=NOW, rng=random.Random(seed))
+            for seed in range(draws)
+        ]
+
+    def test_never_schedules_beyond_the_interval(self) -> None:
+        site = make_site(interval_days=7, jitter_percent=10)
+
+        assert all(when <= NOW + timedelta(days=7) for when in self.spread(site))
+
+    def test_still_spreads_them_out(self) -> None:
+        # The point of jitter: not every site asked at the same clock time for years.
+        site = make_site(interval_days=7, jitter_percent=10)
+
+        assert len(set(self.spread(site))) > 100
+
+    def test_stays_within_the_percentage_asked_for(self) -> None:
+        site = make_site(interval_days=10, jitter_percent=10)
+
+        assert all(when >= NOW + timedelta(days=9) for when in self.spread(site))
+
+    def test_no_jitter_means_exactly_the_interval(self) -> None:
+        site = make_site(interval_days=7, jitter_percent=0)
+
+        assert next_check_time(site, CheckOutcome.OK, now=NOW) == NOW + timedelta(days=7)
+
+    def test_a_session_lasting_exactly_the_interval_is_never_missed(self) -> None:
+        # The case that sent a warning the moment a site was added: a seven-day session, checked
+        # every seven days, and a check jittered five hours late landing after it had gone.
+        settings_row = make_settings(warning_lead_days=7)
+        for seed in range(200):
+            site = make_site(interval_days=7, jitter_percent=10)
+            site.session = SiteSession(expires_at=NOW + timedelta(days=7), state=b"")
+            site.next_check_at = next_check_time(
+                site, CheckOutcome.OK, now=NOW, rng=random.Random(seed)
+            )
+
+            assert is_at_risk(site, settings_row, now=NOW) is None
+
+
+class TestCountingTheDaysLeft:
+    def test_rounds_rather_than_truncates(self) -> None:
+        # Six hours short of a week is a seven-day session, which is what the site granting it
+        # says; calling it six invites somebody to check the arithmetic instead of the interval.
+        site = make_site(interval_days=30, next_check_at=NOW + timedelta(days=30))
+        site.session = SiteSession(expires_at=NOW + timedelta(days=7, hours=-6), state=b"")
+
+        reason = is_at_risk(site, make_settings(warning_lead_days=14), now=NOW)
+
+        assert "7 day(s)" in reason
+
+    def test_never_reports_a_negative_count(self) -> None:
+        site = make_site(interval_days=30, next_check_at=NOW + timedelta(days=30))
+        site.session = SiteSession(expires_at=NOW - timedelta(days=3), state=b"")
+
+        reason = is_at_risk(site, make_settings(warning_lead_days=7), now=NOW)
+
+        assert "0 day(s)" in reason

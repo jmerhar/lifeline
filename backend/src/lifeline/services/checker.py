@@ -133,10 +133,14 @@ def next_check_time(
         exponent = min(max(site.consecutive_failures - 1, 0), MAX_RETRY_EXPONENT)
         return now + min(RETRY_BASE * RETRY_FACTOR**exponent, interval)
 
-    # Jitter keeps a site from being asked at the same clock time for years, and spreads
-    # a batch of sites added on the same day.
+    # Jitter keeps a site from being asked at the same clock time for years, and spreads a batch
+    # of sites added on the same day. It only ever brings a check *forward*, never pushes it back:
+    # an interval is the longest anyone is willing to wait, and a site whose interval matches how
+    # long its session lasts would otherwise have every check that jittered late land after the
+    # session it was meant to renew had already gone. Asking sooner than asked costs a request;
+    # asking later than asked costs the account.
     spread = site.jitter_percent / 100
-    factor = 1 + (rng or random).uniform(-spread, spread) if spread else 1.0
+    factor = 1 - (rng or random).uniform(0, spread) if spread else 1.0
     return now + interval * factor
 
 
@@ -246,7 +250,7 @@ def is_at_risk(site: Site, settings_row: Setting, *, now: datetime) -> str | Non
 
     deadline = site.deadline_at
     if _runs_out_first(deadline, next_check, lead=lead, now=now):
-        days = max((deadline - now).days, 0)
+        days = _days_until(deadline, now)
         return (
             f"the account lapses in {days} day(s), before the next check "
             f"{_when(next_check)} — shorten the interval or log in"
@@ -255,7 +259,7 @@ def is_at_risk(site: Site, settings_row: Setting, *, now: datetime) -> str | Non
     session = site.session
     expiry = session.expires_at if session is not None else None
     if _runs_out_first(expiry, next_check, lead=lead, now=now):
-        days = max((expiry - now).days, 0)
+        days = _days_until(expiry, now)
         return (
             f"everything stored for this site expires in {days} day(s), before the next check "
             f"{_when(next_check)}"
@@ -278,6 +282,16 @@ def _runs_out_first(
     if now <= next_check <= clock:
         return False
     return clock - lead <= now
+
+
+def _days_until(moment: datetime, now: datetime) -> int:
+    """Whole days from ``now`` to ``moment``, to the nearest.
+
+    Rounded rather than truncated: a cookie six hours short of a week is one a site describes as
+    lasting seven days, and calling it six invites somebody to check the arithmetic instead of the
+    interval.
+    """
+    return max(round((moment - now).total_seconds() / 86_400), 0)
 
 
 def _when(moment: datetime) -> str:
