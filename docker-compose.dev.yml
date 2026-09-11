@@ -8,6 +8,10 @@ services:
     build:
       context: .
       target: app
+      args:
+        # The interface is built into this image even here, where Vite serves it instead, so
+        # this build installs from npm and needs the mirror as much as a release build does.
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     # Root in development only: `pip install -e` writes into site-packages, and the mounted
     # source tree belongs to the developer rather than to the container's user.
     user: root
@@ -28,9 +32,13 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    # Vite needs to reach the API by service name from inside the compose network.
     environment:
+      # Vite needs to reach the API by service name from inside the compose network.
       VITE_API_TARGET: http://lifeline:8000
+      # This container runs its own `npm ci`, so the mirror has to arrive as npm configuration
+      # rather than as a build argument. Defaulted to the public registry, which is what the
+      # lockfile records.
+      npm_config_registry: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     ports:
       - "127.0.0.1:5173:5173"
     volumes:
