@@ -102,7 +102,7 @@ export function Field({
 }
 
 /** What Field is able to set on the control it wraps. */
-interface ControlProps {
+export interface ControlProps {
   id?: string;
   "aria-describedby"?: string;
 }

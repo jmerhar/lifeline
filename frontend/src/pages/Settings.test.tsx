@@ -172,7 +172,7 @@ describe("the log level", () => {
 })
 
 describe("the language a site is asked to answer in", () => {
-  it("saves what was typed", async () => {
+  it("saves the header for the language that was picked", async () => {
     // A site serving more than one decides from this, and a pattern typed from a page in one
     // language matches nothing in another.
     const sent: Array<Record<string, unknown>> = [];
@@ -186,12 +186,13 @@ describe("the language a site is asked to answer in", () => {
     render(<Settings />);
     const field = await screen.findByLabelText(/Answer in this language/);
 
-    await userEvent.clear(field);
-    await userEvent.type(field, "hu-HU,hu;q=0.9");
+    await userEvent.selectOptions(field, "Hungarian");
     await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0]!.accept_language).toBe("hu-HU,hu;q=0.9");
+    // Picking a language sends the header for it, which is what a check asks with. A language
+    // offered without a country has nothing to fall back to, so the header is the tag itself.
+    expect(sent[0]!.accept_language).toBe("hu");
   });
 
   it("shows what is configured", async () => {
@@ -202,6 +203,60 @@ describe("the language a site is asked to answer in", () => {
     );
     render(<Settings />);
 
-    expect(await screen.findByLabelText(/Answer in this language/)).toHaveValue("de-DE,de;q=0.9");
+    expect(await screen.findByLabelText(/Answer in this language/)).toHaveValue("de-DE");
+    // The header is the language's own, so there is nothing to write by hand.
+    expect(screen.queryByLabelText("Accept-Language header")).not.toBeInTheDocument();
+  });
+
+  it("offers the header itself for a language it does not list", async () => {
+    server.use(
+      http.get("/api/settings", () =>
+        HttpResponse.json(makeSettings({ accept_language: "de-AT,de;q=0.8,en;q=0.5" })),
+      ),
+    );
+    render(<Settings />);
+
+    expect(await screen.findByLabelText(/Answer in this language/)).toHaveValue("own");
+    expect(screen.getByLabelText("Accept-Language header")).toHaveValue("de-AT,de;q=0.8,en;q=0.5");
+  });
+
+  it("keeps a hand-written header exactly as it is typed", async () => {
+    const sent: Record<string, unknown>[] = [];
+    server.use(
+      http.put("/api/settings", async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        sent.push(body);
+        return HttpResponse.json(body);
+      }),
+    );
+    render(<Settings />);
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText(/Answer in this language/),
+      screen.getByRole("option", { name: /Something else/ }),
+    );
+    const header = screen.getByLabelText("Accept-Language header");
+    await userEvent.clear(header);
+    await userEvent.type(header, "sl-SI,sl;q=0.9,en;q=0.5");
+    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.accept_language).toBe("sl-SI,sl;q=0.9,en;q=0.5");
+  });
+
+  it("keeps the box open while a typed header happens to match a listed language", async () => {
+    render(<Settings />);
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText(/Answer in this language/),
+      screen.getByRole("option", { name: /Something else/ }),
+    );
+    const header = screen.getByLabelText("Accept-Language header");
+    await userEvent.clear(header);
+    // Exactly the header German is offered as: the field must not decide it knows better and
+    // take the box away mid-sentence.
+    await userEvent.type(header, "de-DE,de;q=0.9");
+
+    expect(screen.getByLabelText("Accept-Language header")).toHaveValue("de-DE,de;q=0.9");
   });
 });

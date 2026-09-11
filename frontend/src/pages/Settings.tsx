@@ -14,6 +14,7 @@ import type { Settings as SettingsPayload } from "../api/types";
 import {
   Button,
   Card,
+  type ControlProps,
   Field,
   Input,
   Problem,
@@ -22,6 +23,7 @@ import {
   TextArea,
   Toggle,
 } from "../components/ui";
+import { acceptLanguage, LANGUAGES, languageTag } from "../lib/languages";
 
 export function Settings() {
   const client = useQueryClient();
@@ -180,13 +182,11 @@ export function Settings() {
           </Field>
           <Field
             label="Answer in this language"
-            hint="Sent with every check as Accept-Language. A site serving more than one decides from this, and patterns typed from a page in one language will not match another."
+            hint="Asked for on every check. A site serving more than one language decides from this, and patterns typed from a page in one language will not match another. Something else lets you write the Accept-Language header yourself."
           >
-            <Input
+            <LanguageChoice
               value={draft.accept_language}
-              onChange={(event) => set("accept_language", event.target.value)}
-              placeholder="en-US,en;q=0.9"
-              spellCheck={false}
+              onChange={(header) => set("accept_language", header)}
             />
           </Field>
           <Field
@@ -221,5 +221,63 @@ export function Settings() {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The option standing for a header this list cannot offer. */
+const OWN_HEADER = "own";
+
+/**
+ * Which language to ask sites for, chosen by name.
+ *
+ * What is stored is the Accept-Language header itself, because that is what a check sends and
+ * because a header can express preferences no list of single languages can — a fallback chain,
+ * or a weighting of its own. So the list is the ordinary way in, and choosing to write the
+ * header keeps the box for it.
+ */
+function LanguageChoice({
+  value,
+  onChange,
+  ...control
+}: {
+  value: string;
+  onChange: (header: string) => void;
+} & ControlProps) {
+  // Whether the box is showing belongs to this field. A header no language accounts for has to
+  // show it, and someone who asked for it keeps it until they choose a language again — which a
+  // value derived from the header alone would take away the moment what they typed happened to
+  // match a listed language.
+  const [own, setOwn] = useState(() => languageTag(value) === null);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Select
+        {...control}
+        value={own ? OWN_HEADER : languageTag(value)!}
+        onChange={(event) => {
+          const chosen = event.target.value;
+          setOwn(chosen === OWN_HEADER);
+          // Choosing to write the header leaves the current one to be edited rather than
+          // emptying the box: it is the nearest thing to what was asked for.
+          if (chosen !== OWN_HEADER) onChange(acceptLanguage(chosen));
+        }}
+      >
+        {LANGUAGES.map((language) => (
+          <option key={language.tag} value={language.tag}>
+            {language.label}
+          </option>
+        ))}
+        <option value={OWN_HEADER}>Something else…</option>
+      </Select>
+      {own ? (
+        <Input
+          aria-label="Accept-Language header"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="en-US,en;q=0.9"
+          spellCheck={false}
+        />
+      ) : null}
+    </div>
   );
 }
