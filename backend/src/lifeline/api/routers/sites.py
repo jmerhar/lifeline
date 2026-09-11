@@ -22,7 +22,7 @@ from ...schemas import (
 from ...services import favicon
 from ...services.browser.driver import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from ...services.browser.manager import BrowserUnavailable
-from ...services.checker import capped_next_check, is_at_risk
+from ...services.checker import is_at_risk, next_check_for_interval
 from ...services.cookies import CookieParseError, parse_import
 from ...services.detect import verify
 from ...services.store import (
@@ -153,13 +153,15 @@ async def update(site_id: int, payload: SiteWrite, db: DbDep, services: Services
             status_code=status.HTTP_409_CONFLICT, detail="a site with that name already exists"
         )
     previous_url = site.ping_url
+    previous_interval = site.interval_days
     for field, value in payload.model_dump().items():
         setattr(site, field, value)
     if site.ping_url != previous_url or not site.favicon:
         site.favicon = await _fetch_icon(services, site.ping_url)
-    # A schedule worked out under the old interval would otherwise hold for one more full cycle,
-    # which is the gap somebody shortening an interval is trying to close.
-    site.next_check_at = capped_next_check(site, now=datetime.now(UTC))
+    if site.interval_days != previous_interval:
+        # The change takes effect now rather than after one more cycle of the interval being
+        # replaced, which is the schedule somebody changing it is trying to be rid of.
+        site.next_check_at = next_check_for_interval(site)
     await db.flush()
     return to_read(site)
 

@@ -545,13 +545,46 @@ class TestShorteningAnInterval:
         assert site.next_check_at <= site.last_check_at + timedelta(days=6)
         assert body["interval_days"] == 6
 
-    async def test_leaves_it_alone_when_the_interval_grows(
+    async def test_applies_a_longer_interval_too(
         self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
     ) -> None:
+        # Both directions. A change asked for is a change made; the form is where an interval that
+        # leaves no room for the session gets questioned.
         await self.schedule(db, created["id"], days=5)
-        before = (await db.get(Site, created["id"])).next_check_at
 
         await logged_in.put(f"/api/sites/{created['id']}", json={**NEW_SITE, "interval_days": 30})
+
+        site = await db.get(Site, created["id"])
+        await db.refresh(site)
+        assert site.next_check_at == site.last_check_at + timedelta(days=30)
+
+    async def test_counts_a_shortened_interval_from_the_last_check(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        # Days after that check, so counting from today would put the next one further away than
+        # it already was — the opposite of what shortening an interval is for.
+        site = await db.get(Site, created["id"])
+        site.last_check_at = datetime.now(UTC) - timedelta(days=4)
+        site.next_check_at = site.last_check_at + timedelta(days=7)
+        await db.commit()
+        was = site.next_check_at
+
+        await logged_in.put(f"/api/sites/{created['id']}", json={**NEW_SITE, "interval_days": 6})
+
+        await db.refresh(site)
+        assert site.next_check_at < was
+        assert site.next_check_at == site.last_check_at + timedelta(days=6)
+
+    async def test_leaves_the_schedule_alone_when_the_interval_did_not_change(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        # Editing a name should not move a check, nor re-roll the spread it was given.
+        await self.schedule(db, created["id"], days=6.7)
+        before = (await db.get(Site, created["id"])).next_check_at
+
+        await logged_in.put(
+            f"/api/sites/{created['id']}", json={**NEW_SITE, "name": "renamed"}
+        )
 
         site = await db.get(Site, created["id"])
         await db.refresh(site)

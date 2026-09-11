@@ -146,21 +146,24 @@ def next_check_time(
     return now + interval * factor
 
 
-def capped_next_check(site: Site, *, now: datetime) -> datetime | None:
-    """A next check no further away than the interval now allows.
+def next_check_for_interval(site: Site) -> datetime | None:
+    """When the next check falls, given the interval the site now carries.
 
-    Shortening an interval is almost always done because the schedule is too long — a session that
-    expires before the next check, most often — and a stored time computed under the old interval
-    would keep that gap for one more full cycle, which is the very thing being corrected.
+    Measured from the last check rather than from now, which is the whole of what makes this safe:
+    an interval changed days after the last check would otherwise start a fresh full interval from
+    today, putting the check further away than before and possibly past the expiry of the very
+    session it renews. Counting from the last check means shortening an interval always brings the
+    check nearer, however long ago that check was, and can leave it overdue — which is correct,
+    since it is.
 
-    Only ever pulls the check nearer. Lengthening an interval leaves the next one where it is: it
-    was already agreed to, and pushing it back is how a check ends up landing after the session it
-    was meant to renew.
+    Nothing to say about a site with no next check: that means due immediately, and no interval
+    should postpone it. A site never checked has nothing to count from.
     """
-    if site.next_check_at is None:
-        return None
-    latest = (site.last_check_at or now) + timedelta(days=site.interval_days)
-    return min(site.next_check_at, latest)
+    if site.next_check_at is None or site.last_check_at is None:
+        return site.next_check_at
+    # No jitter. Jitter spreads a fleet of scheduled checks; this one was asked for by hand, and a
+    # deterministic answer is what makes "I set six days" mean six days after the last check.
+    return site.last_check_at + timedelta(days=site.interval_days)
 
 
 class HttpFetcher:
