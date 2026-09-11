@@ -146,6 +146,23 @@ def next_check_time(
     return now + interval * factor
 
 
+def capped_next_check(site: Site, *, now: datetime) -> datetime | None:
+    """A next check no further away than the interval now allows.
+
+    Shortening an interval is almost always done because the schedule is too long — a session that
+    expires before the next check, most often — and a stored time computed under the old interval
+    would keep that gap for one more full cycle, which is the very thing being corrected.
+
+    Only ever pulls the check nearer. Lengthening an interval leaves the next one where it is: it
+    was already agreed to, and pushing it back is how a check ends up landing after the session it
+    was meant to renew.
+    """
+    if site.next_check_at is None:
+        return None
+    latest = (site.last_check_at or now) + timedelta(days=site.interval_days)
+    return min(site.next_check_at, latest)
+
+
 class HttpFetcher:
     """Fetches a site's ping URL with a plain HTTP request.
 

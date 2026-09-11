@@ -11,6 +11,7 @@ from lifeline.models import CheckOutcome, Site, SiteSession
 from lifeline.services.checker import (
     RETRY_BASE,
     HttpFetcher,
+    capped_next_check,
     decide,
     is_at_risk,
     matches,
@@ -555,3 +556,45 @@ class TestTheLanguageAskedFor:
 
         assert route.calls.last.request.headers["User-Agent"] == "Captured/1"
         assert route.calls.last.request.headers["Accept-Language"] == "en-GB"
+
+
+class TestCappingTheScheduleToTheInterval:
+    """A stored next check, once the interval it was worked out from has changed."""
+
+    def test_pulls_a_check_in_when_the_interval_shortens(self) -> None:
+        # The gap somebody shortening an interval is trying to close; leaving it would hold that
+        # gap for one more full cycle.
+        site = make_site(interval_days=6)
+        site.last_check_at = NOW
+        site.next_check_at = NOW + timedelta(days=6, hours=16)
+
+        assert capped_next_check(site, now=NOW) == NOW + timedelta(days=6)
+
+    def test_leaves_a_check_alone_when_the_interval_lengthens(self) -> None:
+        # It was already agreed to, and pushing it back is how a check lands after the session it
+        # was meant to renew.
+        site = make_site(interval_days=30)
+        site.last_check_at = NOW
+        site.next_check_at = NOW + timedelta(days=5)
+
+        assert capped_next_check(site, now=NOW) == NOW + timedelta(days=5)
+
+    def test_leaves_a_check_that_already_fits(self) -> None:
+        site = make_site(interval_days=7)
+        site.last_check_at = NOW
+        site.next_check_at = NOW + timedelta(days=6, hours=16)
+
+        assert capped_next_check(site, now=NOW) == NOW + timedelta(days=6, hours=16)
+
+    def test_measures_from_now_for_a_site_never_checked(self) -> None:
+        site = make_site(interval_days=3)
+        site.last_check_at = None
+        site.next_check_at = NOW + timedelta(days=10)
+
+        assert capped_next_check(site, now=NOW) == NOW + timedelta(days=3)
+
+    def test_leaves_a_site_that_is_due_now_due_now(self) -> None:
+        # No next-check time means due immediately, which no interval should postpone.
+        site = make_site(interval_days=1, next_check_at=None)
+
+        assert capped_next_check(site, now=NOW) is None

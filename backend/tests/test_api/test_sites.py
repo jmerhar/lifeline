@@ -516,3 +516,53 @@ class TestTryingRulesOverHttp:
         ).json()
 
         assert [rule["rule"] for rule in body["rules"]] == ["success_pattern"]
+
+
+class TestShorteningAnInterval:
+    """Changing an interval has to change the schedule worked out from the old one."""
+
+    async def schedule(self, db: AsyncSession, site_id: int, *, days: float) -> None:
+        site = await db.get(Site, site_id)
+        site.last_check_at = datetime.now(UTC)
+        site.next_check_at = site.last_check_at + timedelta(days=days)
+        await db.commit()
+
+    async def test_brings_the_next_check_forward(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        # The gap being closed: a session expiring before a check that was scheduled under a
+        # longer interval, which would otherwise hold for one more full cycle.
+        await self.schedule(db, created["id"], days=6.7)
+
+        body = (
+            await logged_in.put(
+                f"/api/sites/{created['id']}", json={**NEW_SITE, "interval_days": 6}
+            )
+        ).json()
+
+        site = await db.get(Site, created["id"])
+        await db.refresh(site)
+        assert site.next_check_at <= site.last_check_at + timedelta(days=6)
+        assert body["interval_days"] == 6
+
+    async def test_leaves_it_alone_when_the_interval_grows(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        await self.schedule(db, created["id"], days=5)
+        before = (await db.get(Site, created["id"])).next_check_at
+
+        await logged_in.put(f"/api/sites/{created['id']}", json={**NEW_SITE, "interval_days": 30})
+
+        site = await db.get(Site, created["id"])
+        await db.refresh(site)
+        assert site.next_check_at == before
+
+    async def test_leaves_a_site_that_is_due_now_due_now(
+        self, logged_in: httpx.AsyncClient, db: AsyncSession, created: dict
+    ) -> None:
+        # A newly added site is due immediately; no interval should postpone that.
+        await logged_in.put(f"/api/sites/{created['id']}", json={**NEW_SITE, "interval_days": 3})
+
+        site = await db.get(Site, created["id"])
+        await db.refresh(site)
+        assert site.next_check_at is None

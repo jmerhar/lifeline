@@ -22,7 +22,7 @@ from ...schemas import (
 from ...services import favicon
 from ...services.browser.driver import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from ...services.browser.manager import BrowserUnavailable
-from ...services.checker import is_at_risk
+from ...services.checker import capped_next_check, is_at_risk
 from ...services.cookies import CookieParseError, parse_import
 from ...services.detect import verify
 from ...services.store import (
@@ -157,6 +157,9 @@ async def update(site_id: int, payload: SiteWrite, db: DbDep, services: Services
         setattr(site, field, value)
     if site.ping_url != previous_url or not site.favicon:
         site.favicon = await _fetch_icon(services, site.ping_url)
+    # A schedule worked out under the old interval would otherwise hold for one more full cycle,
+    # which is the gap somebody shortening an interval is trying to close.
+    site.next_check_at = capped_next_check(site, now=datetime.now(UTC))
     await db.flush()
     return to_read(site)
 
