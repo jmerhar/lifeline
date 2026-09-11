@@ -229,8 +229,10 @@ export function Choice({
           {hint ? <span className="block text-micro text-muted">{hint}</span> : null}
         </span>
       </label>
-      {/* Indented to the label's text, so what belongs to a choice reads as part of it. */}
-      {checked && children ? <div className="mt-3 ml-6.5">{children}</div> : null}
+      {/* Indented to the label's text, so what belongs to a choice reads as part of it: the
+          radio's own width and the gap beside it, as an exact length because Tailwind's spacing
+          scale has no step at 1.625rem and a class it does not define is emitted as nothing. */}
+      {checked && children ? <div className="mt-3 ml-[1.625rem]">{children}</div> : null}
     </div>
   );
 }
@@ -260,10 +262,14 @@ export function Switch({
         checked ? "bg-accent" : "bg-line"
       }`}
     >
+      {/* The knob's travel is the track less the knob and the inset at each end. Written as
+          an exact length: the spacing scale stops halving at 3.5, and a class Tailwind does not
+          define is emitted as nothing at all — which leaves the knob sitting at the off end in
+          both states, the switch coloured on but reading off. */}
       <span
         aria-hidden="true"
         className={`h-4 w-4 rounded-full bg-canvas transition-transform ${
-          checked ? "translate-x-4.5" : "translate-x-0.5"
+          checked ? "translate-x-[1.125rem]" : "translate-x-0.5"
         }`}
       />
     </button>
