@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   countdown,
+  dueIn,
   isGood,
   relativeTime,
   sessionContents,
@@ -64,6 +65,32 @@ describe("countdown", () => {
 
   it("never counts down to zero minutes while there is time left", () => {
     expect(countdown("2026-09-06T12:00:30Z", NOW)).toBe("1m");
+  });
+});
+
+describe("dueIn", () => {
+  it("treats nothing scheduled as due now", () => {
+    expect(dueIn(null, NOW)).toBe("due now");
+  });
+
+  it("treats a time already past as due now rather than late", () => {
+    expect(dueIn("2026-09-05T12:00:00Z", NOW)).toBe("due now");
+  });
+
+  it("counts the last minute as due now", () => {
+    expect(dueIn("2026-09-06T12:00:30Z", NOW)).toBe("due now");
+  });
+
+  it("counts minutes", () => {
+    expect(dueIn("2026-09-06T12:40:00Z", NOW)).toBe("in 40m");
+  });
+
+  it("counts hours", () => {
+    expect(dueIn("2026-09-06T15:00:00Z", NOW)).toBe("in 3h");
+  });
+
+  it("counts days", () => {
+    expect(dueIn("2026-09-11T12:00:00Z", NOW)).toBe("in 5d");
   });
 });
 

@@ -34,6 +34,23 @@ export function countdown(value: string | null, now: Date = new Date()): string 
   return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
+/**
+ * How long until something is due, worded as a wait rather than as a deadline.
+ *
+ * The scheduler works through whatever is due on each tick, so a time already past means
+ * the work is queued rather than late; a site with no time at all is due immediately for
+ * the same reason. Both are "due now".
+ */
+export function dueIn(value: string | null, now: Date = new Date()): string {
+  const remaining = value ? new Date(value).getTime() - now.getTime() : 0;
+  // Ticks are a minute apart, so anything nearer than one is happening now as far as anybody
+  // watching can tell.
+  if (remaining < MINUTE) return "due now";
+  if (remaining < HOUR) return `in ${Math.floor(remaining / MINUTE)}m`;
+  if (remaining < DAY) return `in ${Math.floor(remaining / HOUR)}h`;
+  return `in ${Math.floor(remaining / DAY)}d`;
+}
+
 // One formatter, fixed to en-GB: day first with the month named, and a 24-hour clock. The
 // browser's own locale is deliberately not used — it would render the same instant as
 // "9/7/2026, 10:05 AM" for one reader and "07/09/2026, 10:05" for another, and a numeric

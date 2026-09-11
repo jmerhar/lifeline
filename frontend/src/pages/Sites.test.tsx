@@ -78,6 +78,45 @@ describe("Sites", () => {
     expect(status.textContent).toContain("the account lapses in 4 day(s)");
   });
 
+  it("says how long until the next check", async () => {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          // Half an hour past the three so the floor to whole hours cannot land on two while
+          // the test is running.
+          makeSite({ next_check_at: new Date(Date.now() + 3.5 * 60 * 60 * 1000).toISOString() }),
+        ]),
+      ),
+    );
+
+    render(<Sites />);
+    await screen.findByText("example");
+
+    // Sixth cell: the switch, the site, the status, the pulse, when it was last checked, then
+    // when it will be next.
+    expect(document.querySelectorAll("tbody tr td")[5]!.textContent).toBe("in 3h");
+  });
+
+  it("does not count down to a check a paused site will not get", async () => {
+    server.use(
+      http.get("/api/sites", () =>
+        HttpResponse.json([
+          // A time still to come, so the cell would count down to it if being paused were
+          // not taken into account.
+          makeSite({
+            enabled: false,
+            next_check_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+          }),
+        ]),
+      ),
+    );
+
+    render(<Sites />);
+    await screen.findByText("example");
+
+    expect(document.querySelectorAll("tbody tr td")[5]!.textContent).toBe("paused");
+  });
+
   it("summarises the sites above the table", async () => {
     server.use(
       http.get("/api/sites", () =>
