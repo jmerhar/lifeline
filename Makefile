@@ -22,7 +22,7 @@ browser: ## Download the Chromium build Playwright drives
 ##@ Development
 
 dev: ## Start the stack with hot reload (API on :8000, interface on :5173)
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	bin/dev.sh
 
 up: ## Build and start the production stack
 	docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
