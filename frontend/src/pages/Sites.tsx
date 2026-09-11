@@ -16,6 +16,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Button, Card, Empty, Problem, Spinner, Switch } from "../components/ui";
 import {
   countdown,
+  dueIn,
   relativeTime,
   sessionContents,
   summarise,
@@ -110,7 +111,7 @@ export function Sites() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] border-collapse text-small">
+            <table className="w-full min-w-[960px] border-collapse text-small">
               <thead>
                 <tr className="border-b border-line text-left text-micro text-muted">
                   <th className="px-3 py-2 font-medium">On</th>
@@ -118,6 +119,7 @@ export function Sites() {
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Pulse</th>
                   <th className="px-3 py-2 font-medium">Checked</th>
+                  <th className="px-3 py-2 font-medium">Next check</th>
                   <th className="px-3 py-2 font-medium">Lapses in</th>
                   <th className="px-3 py-2 font-medium">
                     <span className="sr-only">Actions</span>
@@ -260,6 +262,11 @@ function SiteRow({
           <PulseStrip pulse={(site.pulse ?? []).map((outcome) => ({ outcome }))} />
         </td>
         <td className="px-3 py-2 tabular text-muted">{relativeTime(site.last_check_at)}</td>
+        {/* A paused site keeps the time it was going to be checked at, and the scheduler passes
+            over it anyway, so counting down to it would promise a check that never comes. */}
+        <td className="px-3 py-2 tabular text-muted">
+          {site.enabled ? dueIn(site.next_check_at) : "paused"}
+        </td>
         <td className="px-3 py-2 tabular text-muted">{countdown(site.deadline_at)}</td>
         <td className="px-3 py-2">
           <div className="flex items-center justify-end gap-1">
@@ -280,7 +287,7 @@ function SiteRow({
       </tr>
       {expanded ? (
         <tr className="border-b border-line/60 bg-raised/40">
-          <td colSpan={7} className="px-3 py-3">
+          <td colSpan={8} className="px-3 py-3">
             <dl className="grid gap-x-6 gap-y-2 text-micro sm:grid-cols-3">
               <Detail label="Ping URL">
                 <span className="font-mono break-all">{site.ping_url}</span>
