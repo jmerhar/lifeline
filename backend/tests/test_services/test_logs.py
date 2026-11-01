@@ -111,7 +111,7 @@ class TestApplyLevel:
 
 
 class TestWireLoggersStayQuiet:
-    def test_httpcore_is_held_at_info_even_at_debug(self, settings: Settings) -> None:
+    def test_httpcore_is_held_at_warning_even_at_debug(self, settings: Settings) -> None:
         # It logs response headers at DEBUG, and on a site that re-issues its session cookie on
         # every request that means writing a live credential to disk.
         logs.configure(settings)
@@ -119,7 +119,7 @@ class TestWireLoggersStayQuiet:
         logs.apply_level("DEBUG")
 
         assert logging.getLogger().level == logging.DEBUG
-        assert logging.getLogger("httpcore").level == logging.INFO
+        assert logging.getLogger("httpcore").level == logging.WARNING
 
     def test_httpcore_follows_a_raised_level(self, settings: Settings) -> None:
         # Pinned at the bottom, not fixed: asking for less should still give less.
@@ -132,7 +132,7 @@ class TestWireLoggersStayQuiet:
     def test_configuring_at_debug_also_pins_it(self, data_dir: Path) -> None:
         logs.configure(Settings(data_dir=data_dir, log_level="DEBUG"))
 
-        assert logging.getLogger("httpcore").level == logging.INFO
+        assert logging.getLogger("httpcore").level == logging.WARNING
 
     async def test_a_reissued_cookie_never_reaches_the_log(self, settings: Settings) -> None:
         # The regression this guards: the log file sits beside the database whose whole purpose is

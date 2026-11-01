@@ -2,10 +2,9 @@
 
 from datetime import datetime
 
+from jigkit.models import Base, TimestampMixin, UtcDateTime
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
-
-from .base import Base, TimestampMixin, UtcDateTime
 
 
 class User(Base, TimestampMixin):

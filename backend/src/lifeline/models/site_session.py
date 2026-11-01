@@ -2,10 +2,10 @@
 
 from datetime import datetime
 
+from jigkit.models import Base, TimestampMixin, UtcDateTime
 from sqlalchemy import ForeignKey, LargeBinary, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, TimestampMixin, UtcDateTime
 from .enums import CaptureMethod, enum_column
 from .site import Site
 

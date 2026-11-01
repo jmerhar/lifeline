@@ -5,7 +5,8 @@ schema on ``Base.metadata`` — which is what Alembic's autogenerate and the tes
 fixtures' ``create_all`` both read.
 """
 
-from .base import Base, TimestampMixin, UtcDateTime, utcnow
+from jigkit.models import Base, TimestampMixin, UtcDateTime, utcnow
+
 from .check import Check
 from .enums import CaptureMethod, CheckOutcome, PingMethod, SiteStatus
 from .setting import SETTINGS_ID, Setting

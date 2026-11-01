@@ -1,9 +1,8 @@
 """Instance-wide settings, held in a single row."""
 
+from jigkit.models import Base, TimestampMixin
 from sqlalchemy import Boolean, CheckConstraint, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-
-from .base import Base, TimestampMixin
 
 # The only primary key this table ever holds.
 SETTINGS_ID = 1

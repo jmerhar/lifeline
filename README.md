@@ -82,7 +82,8 @@ Every setting has a working default; `.env.example` lists them. The ones worth k
 | `BROWSER_EXTENSION_DIR` | `/opt/bitwarden` | An unpacked extension loaded into the login browser. Set it empty to load none, or point it at a directory you mount yourself. |
 
 Anything holding a secret also accepts a `*_FILE` variant naming a file to read it from, for
-a deployment that would rather mount secrets than pass them in the environment.
+a deployment that would rather mount secrets than pass them in the environment. Set one or the
+other: setting both stops lifeline at startup.
 
 Behind a reverse proxy, forward the `Upgrade` header — the login browser is streamed over a
 websocket. lifeline reads `X-Forwarded-Proto` to decide whether its session cookie is
