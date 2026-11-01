@@ -1,0 +1,42 @@
+# Weekly updates, one grouped pull request per ecosystem. A pull request builds the image, so a
+# dependency that breaks it fails there. A release is taken once it is three days old, so a
+# hijacked version has usually been pulled before an update proposes it; jigkit, released from
+# the same hands, is taken at once.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # The interface.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 3
+    groups:
+      frontend:
+        patterns:
+          - "*"
+
+  # The backend's declared ranges and its exact jigkit pin.
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 3
+      exclude:
+        - "jigkit"
+    groups:
+      backend:
+        patterns:
+          - "*"
