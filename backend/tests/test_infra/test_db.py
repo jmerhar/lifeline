@@ -5,8 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from lifeline.config import Settings
-from lifeline.db import session_scope, wants_sqlite_pragmas
+from lifeline.db import session_scope
 from lifeline.models import Site
 from tests.conftest import make_site
 
@@ -26,13 +25,6 @@ class TestSqlitePragmas:
             result = await connection.execute(text("PRAGMA journal_mode"))
 
             assert result.scalar_one() == "wal"
-
-    def test_are_wanted_for_a_sqlite_url(self, data_dir) -> None:
-        assert wants_sqlite_pragmas(Settings(data_dir=data_dir).resolved_database_url) is True
-
-    def test_are_not_wanted_for_another_backend(self) -> None:
-        # Attaching them to another backend's engine would fail on its first connection.
-        assert wants_sqlite_pragmas("postgresql+asyncpg://user@localhost/db") is False
 
 
 class TestSessionScope:

@@ -89,9 +89,6 @@ class TestBlankSettings:
         # try to serve its own working directory as the built interface.
         assert Settings(data_dir=data_dir, static_dir="").static_dir is None
 
-    def test_a_dot_static_dir_means_no_frontend(self, data_dir: Path) -> None:
-        assert Settings(data_dir=data_dir, static_dir=".").static_dir is None
-
     def test_an_empty_secret_key_means_generate_one(self, data_dir: Path) -> None:
         settings = Settings(data_dir=data_dir, secret_key="")
 

@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from jigkit.models import Base, TimestampMixin, UtcDateTime
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, TimestampMixin, UtcDateTime
 from .enums import PingMethod, SiteStatus, enum_column
 
 if TYPE_CHECKING:

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from lifeline.config import Settings
 from lifeline.services.crypto import (
@@ -81,16 +82,16 @@ def test_secret_can_be_read_from_a_file(data_dir: Path) -> None:
     assert Settings(data_dir=data_dir, secret_key_file=path).secret_key == "from-a-file"
 
 
-def test_an_explicit_value_wins_over_a_file(data_dir: Path) -> None:
+def test_a_value_and_a_file_together_are_refused(data_dir: Path) -> None:
+    # Either one silently winning would run the deployment with a key nobody meant it to use.
     path = data_dir / "mounted-secret"
     path.write_text("from-a-file")
 
-    settings = Settings(data_dir=data_dir, secret_key="from-the-environment", secret_key_file=path)
-
-    assert settings.secret_key == "from-the-environment"
+    with pytest.raises(ValidationError, match="SECRET_KEY and SECRET_KEY_FILE are exclusive"):
+        Settings(data_dir=data_dir, secret_key="from-the-environment", secret_key_file=path)
 
 
 def test_a_missing_secret_file_is_an_error(data_dir: Path) -> None:
     # Silently falling back would generate a fresh key and orphan every stored session.
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ValidationError, match="SECRET_KEY_FILE: cannot read"):
         Settings(data_dir=data_dir, secret_key_file=data_dir / "absent")

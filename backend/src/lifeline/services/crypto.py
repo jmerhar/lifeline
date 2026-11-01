@@ -9,16 +9,12 @@ live credentials.
 import base64
 import hashlib
 import json
-import logging
-import os
-import secrets
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
+from jigkit import secrets as jigkit_secrets
 
 from ..config import Settings
-
-logger = logging.getLogger(__name__)
 
 
 class DecryptionError(RuntimeError):
@@ -38,28 +34,15 @@ def derive_fernet_key(secret: str) -> bytes:
 
 
 def load_or_create_secret(settings: Settings) -> str:
-    """Return the configured secret, generating and persisting one if there is none.
+    """Return the configured secret, or the one generated into the data directory.
 
-    Generating on first boot is what lets the tool start with no configuration at all.
-    The file is written with owner-only permissions and never rewritten: losing it means
-    every stored session has to be captured again, so it must survive a restart.
+    Generating on first boot is what lets the tool start with no configuration at all. The
+    generated file is owner-only and never rewritten: losing it means every stored session has
+    to be captured again.
     """
     if settings.secret_key:
         return settings.secret_key
-
-    path = settings.secret_key_path
-    if path.exists():
-        return path.read_text().strip()
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    secret = secrets.token_urlsafe(48)
-    # Written 0600 through the open flags rather than chmod'ed afterwards, which would
-    # leave the contents world-readable for the moment in between.
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as handle:
-        handle.write(secret)
-    logger.info("generated a new encryption key at %s", path)
-    return secret
+    return jigkit_secrets.load_or_create_secret(settings.secret_key_path)
 
 
 class Cipher:
