@@ -10,7 +10,8 @@ with the captured session, and notifies you through Apprise when a session stops
 
 ```
 backend/src/lifeline/
-  config.py            settings; every secret also accepts a *_FILE variant
+  config.py            settings on jigkit's AppSettings; every secret also accepts a *_FILE
+                       variant (never both)
   models/              SQLAlchemy models; UtcDateTime keeps every datetime aware
   schemas.py           the API's request and response shapes
   api/                 FastAPI app, dependencies, security, routers
@@ -28,6 +29,11 @@ bin/                   every script the Makefile and CI run
 
 ## Things worth knowing before changing anything
 
+- **The shared foundations come from jigkit** (github.com/jmerhar/jigkit): the settings base,
+  the database engine and model base, the Alembic environment, the logging setup, the
+  container health probe and generated secrets. `lifeline.db`, `services/logs.py` and
+  `services/crypto.load_or_create_secret` are thin wrappers over it. It is pinned to a commit
+  in `backend/pyproject.toml`; change that pin to take a new version.
 - **Response cookies must be written back after every ping.** A session with a sliding expiry
   re-issues its cookie on each request and some schemes rotate the token outright, so
   discarding the response's cookies either throws away the extension the ping just earned or
