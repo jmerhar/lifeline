@@ -187,6 +187,42 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "Health": {
+        "description": "The application's state as the health probe sees it.",
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "database",
+          "version",
+          "revision"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
       "LoginRequest": {
         "description": "A login attempt.",
         "properties": {
@@ -1422,22 +1458,28 @@
     },
     "/api/health": {
       "get": {
-        "description": "Report that the process is up and its database is reachable.\n\nUnauthenticated, and it touches the database rather than only returning a constant: a\ncontainer that answers while its database is unopenable is not healthy, and a probe\nthat cannot tell the difference is worse than none.",
+        "description": "Report that the process is up and its database answers.",
         "operationId": "health_api_health_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Health Api Health Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Health"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Health",

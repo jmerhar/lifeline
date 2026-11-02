@@ -106,4 +106,24 @@ describe("client", () => {
 
     expect(url).toContain("limit=25");
   });
+
+  it("marks every write as the interface's own, and no read", async () => {
+    // The API refuses a write without the header, which another site's page cannot add.
+    const seen: Record<string, string | null> = {};
+    server.use(
+      http.post("/api/auth/logout", ({ request }) => {
+        seen.write = request.headers.get("X-Requested-With");
+        return HttpResponse.json({ detail: "logged out" });
+      }),
+      http.get("/api/sites", ({ request }) => {
+        seen.read = request.headers.get("X-Requested-With");
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await api.logout();
+    await api.sites();
+
+    expect(seen).toEqual({ write: "lifeline", read: null });
+  });
 });

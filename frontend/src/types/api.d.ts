@@ -136,11 +136,7 @@ export interface paths {
         };
         /**
          * Health
-         * @description Report that the process is up and its database is reachable.
-         *
-         *     Unauthenticated, and it touches the database rather than only returning a constant: a
-         *     container that answers while its database is unopenable is not healthy, and a probe
-         *     that cannot tell the difference is worse than none.
+         * @description Report that the process is up and its database answers.
          */
         get: operations["health_api_health_get"];
         put?: never;
@@ -496,6 +492,20 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Health
+         * @description The application's state as the health probe sees it.
+         */
+        Health: {
+            /** Database */
+            database: string;
+            /** Revision */
+            revision: string | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
         };
         /**
          * LoginRequest
@@ -1145,9 +1155,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
                 };
             };
         };

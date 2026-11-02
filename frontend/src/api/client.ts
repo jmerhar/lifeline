@@ -46,11 +46,19 @@ export class NotAuthenticated extends Error {
   }
 }
 
+/**
+ * Sent with every write. The API refuses a write without it, and a page on another site cannot
+ * add it to a request without a CORS preflight the API never grants.
+ */
+export const WRITE_HEADER = { "X-Requested-With": "lifeline" };
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
   const response = await fetch(`/api${path}`, {
     ...init,
     headers: {
       ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(method === "GET" || method === "HEAD" ? {} : WRITE_HEADER),
       ...init.headers,
     },
     // The session is a cookie, and a cross-origin dev server would otherwise drop it.

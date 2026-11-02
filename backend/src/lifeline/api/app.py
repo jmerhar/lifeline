@@ -5,20 +5,33 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Request
+from jigkit.web import (
+    health_router,
+    install_security_headers,
+    install_write_guard,
+    mount_spa,
+)
+from sqlalchemy import text
 
 from .. import __version__
 from ..config import SETUP_TOKEN_DISABLED, Settings, get_settings
 from ..services import logs
 from .deps import build_services
-from .routers import auth, browser, checks, health, setup, sites
+from .routers import auth, browser, checks, setup, sites
 from .routers import settings as settings_router
 
 logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api"
+#: The value of the X-Requested-With header every write must carry; the interface sends it.
+WRITE_HEADER_VALUE = "lifeline"
+
+
+async def check_database(request: Request) -> None:
+    """Run a trivial query, raising if the database cannot answer."""
+    async with request.app.state.services.engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
 
 
 def resolve_setup_token(settings: Settings) -> str | None:
@@ -116,10 +129,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=f"{API_PREFIX}/openapi.json",
     )
 
-    for module in (health, setup, auth, sites, checks, settings_router, browser):
+    app.include_router(
+        health_router(check_database, version=__version__, revision=settings.revision),
+        prefix=API_PREFIX,
+    )
+    for module in (setup, auth, sites, checks, settings_router, browser):
         app.include_router(module.router, prefix=API_PREFIX)
-
-    _mount_frontend(app, settings)
+    install_write_guard(
+        app, value=WRITE_HEADER_VALUE, public_url=settings.public_url, prefix=API_PREFIX
+    )
+    install_security_headers(app)
+    # Last: its catch-all answers whatever no route above matched.
+    mount_spa(app, settings.static_dir, api_prefix=API_PREFIX)
     return app
 
 
@@ -143,33 +164,3 @@ async def _apply_stored_log_level(services: object) -> None:
         logger.warning("could not read the stored log level; keeping the configured one")
         return
     logs.apply_level(row.log_level)
-
-
-def _mount_frontend(app: FastAPI, settings: Settings) -> None:
-    """Serve the built single-page app, when one is present.
-
-    Absent — which is how the dev stack runs, with Vite serving the app and proxying the
-    API — the application is just the API, and nothing here pretends otherwise.
-    """
-    directory = settings.static_dir
-    if directory is None or not directory.is_dir():
-        logger.info("no built frontend at %s; serving the API only", directory)
-        return
-
-    index = directory / "index.html"
-    app.mount("/assets", StaticFiles(directory=directory / "assets"), name="assets")
-
-    @app.get("/{path:path}", include_in_schema=False)
-    async def spa(path: str) -> FileResponse:
-        """Serve a real file if there is one, and the app's shell otherwise.
-
-        Client-side routing means /sites and /settings are not files: they have to return
-        the shell so the app can read the URL and render the right view. Registered last, so
-        every API route is matched before this catch-all sees the request.
-        """
-        candidate = (directory / path).resolve()
-        # Confining the result to the static directory keeps a crafted path such as
-        # ../../etc/passwd from being served.
-        if path and directory.resolve() in candidate.parents and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(index)
