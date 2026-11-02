@@ -461,7 +461,13 @@ def app(services):
 async def client(app) -> AsyncIterator[httpx.AsyncClient]:
     """An HTTP client speaking to the application in-process."""
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://lifeline.test") as instance:
+    # Sent on every request, as the interface sends it on every write; a test of the write
+    # guard removes it.
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://lifeline.test",
+        headers={"X-Requested-With": "lifeline"},
+    ) as instance:
         yield instance
 
 

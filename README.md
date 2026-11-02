@@ -77,6 +77,8 @@ Every setting has a working default; `.env.example` lists them. The ones worth k
 | `LIFELINE_BIND` / `LIFELINE_PORT` | `127.0.0.1` / `8000` | Where the interface is published. The default assumes a reverse proxy in front. |
 | `SETUP_TOKEN` | generated | Guards the first-run wizard. `off` disables it — only where nobody else can reach the interface. |
 | `SECRET_KEY` | generated into `./data` | Encrypts the stored sessions. **Losing it means logging into every site again.** |
+| `PUBLIC_URL` | | The address people open the interface at, such as `https://lifeline.example.com`. Writes from any other origin are refused. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1,172.16.0.0/12` | Proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed: addresses or networks. Not `*`, which lets a client choose the address the login throttle counts. |
 | `AUTH_DISABLED` | `false` | Skips lifeline's own login, for an instance already behind someone else's authentication. |
 | `LIFELINE_UID` / `LIFELINE_GID` | `1000` | The user the container runs as. It must own `./data`. |
 | `BROWSER_EXTENSION_DIR` | `/opt/bitwarden` | An unpacked extension loaded into the login browser. Set it empty to load none, or point it at a directory you mount yourself. |
