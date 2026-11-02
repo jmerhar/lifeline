@@ -1,11 +1,11 @@
 """The application factory."""
 
 import logging
-import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from jigkit.auth import resolve_setup_token as jigkit_resolve_setup_token
 from jigkit.web import (
     health_router,
     install_security_headers,
@@ -42,9 +42,7 @@ def resolve_setup_token(settings: Settings) -> str | None:
     persisted: a restart before setup is a fine moment to mint a new one, and after setup it
     is never needed again.
     """
-    if settings.setup_token_disabled:
-        return None
-    return settings.setup_token or secrets.token_urlsafe(9)
+    return jigkit_resolve_setup_token(settings.setup_token)
 
 
 async def setup_is_pending(services: object) -> bool:

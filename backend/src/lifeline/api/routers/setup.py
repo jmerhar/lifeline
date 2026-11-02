@@ -1,6 +1,7 @@
 """The first-run wizard."""
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from jigkit.auth import setup_token_matches
 from sqlalchemy import func, select
 
 from ...models import User
@@ -38,8 +39,21 @@ async def complete(
 
     Guarded by a token printed to the container's log. This instance may be reachable from
     the internet before anyone has configured it, and without the token whoever found the
-    URL first would own it.
+    URL first would own it. Held under a lock, so two requests at once cannot both create an
+    administrator.
     """
+    async with services.setup_lock:
+        return await _complete(payload, db, services, request, response)
+
+
+async def _complete(
+    payload: SetupRequest,
+    db: DbDep,
+    services: ServicesDep,
+    request: Request,
+    response: Response,
+) -> UserRead:
+    """Create the administrator, with the setup lock held."""
     if await _user_count(db) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="this instance is already set up"
@@ -54,7 +68,7 @@ async def complete(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="restart lifeline to set it up again; it will print a new setup token",
         )
-    if expected is not None and payload.token != expected:
+    if not setup_token_matches(expected, payload.token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="the setup token does not match the one in the container log",
@@ -76,5 +90,6 @@ async def complete(
 
     # The token is single-use: setup is complete, so nothing may run it again.
     request.app.state.setup_token = None
-    issue_session_cookie(response, services, user.id, request)
+    token = await services.sessions.open(db, user.id, request.headers.get("user-agent", ""))
+    issue_session_cookie(response, services, token, request)
     return UserRead.model_validate(user)

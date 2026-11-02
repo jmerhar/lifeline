@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from lifeline.api.deps import build_services, cipher_secret
+from lifeline.api.deps import build_services
 from lifeline.config import Settings
 from lifeline.models import PingMethod
 from lifeline.services.crypto import load_or_create_secret
@@ -48,15 +48,6 @@ class TestBuildServices:
             assert settings.secret_key_path.exists()
         finally:
             await services.engine.dispose()
-
-
-class TestCipherSecret:
-    def test_signs_cookies_with_the_same_secret_as_the_session_store(
-        self, settings: Settings
-    ) -> None:
-        # Rotating it invalidates browser logins and stored sessions together, which is the
-        # honest behaviour: both were protected by it.
-        assert cipher_secret(settings) == settings.secret_key
 
 
 class TestGetSettings:

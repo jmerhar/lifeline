@@ -88,8 +88,8 @@ a deployment that would rather mount secrets than pass them in the environment. 
 other: setting both stops lifeline at startup.
 
 Behind a reverse proxy, forward the `Upgrade` header — the login browser is streamed over a
-websocket. lifeline reads `X-Forwarded-Proto` to decide whether its session cookie is
-`Secure`.
+websocket — and `X-Forwarded-Proto`, which makes the session cookie `Secure` when the proxy's
+address is in `FORWARDED_ALLOW_IPS`.
 
 ## Adding a site
 

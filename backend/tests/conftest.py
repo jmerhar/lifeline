@@ -9,7 +9,7 @@ import tempfile
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -414,7 +414,7 @@ def services(
 ):
     """The service graph, with every outside edge replaced by a stand-in."""
     from lifeline.api.deps import Services
-    from lifeline.api.security import LoginThrottle, SessionCookies
+    from lifeline.api.security import LoginThrottle, login_sessions
     from lifeline.services.browser.fetcher import BrowserFetcher
     from lifeline.services.detect import Detector
     from lifeline.services.scheduler import Scheduler
@@ -432,7 +432,7 @@ def services(
         notifier=notifier,
         runner=runner,
         scheduler=Scheduler(sessionmaker, settings, runner, notifier),
-        cookies=SessionCookies(settings.secret_key, timedelta(hours=1)),
+        sessions=login_sessions(settings),
         throttle=LoginThrottle(settings.login_rate_limit_per_minute),
         browser=browser,
         # The real one: it makes ordinary HTTP requests, which respx intercepts, and a test
@@ -484,10 +484,11 @@ async def admin(db: AsyncSession) -> User:
 
 @pytest.fixture
 async def logged_in(client, services, admin) -> httpx.AsyncClient:
-    """A client carrying a valid session cookie."""
-    client.cookies.set(
-        services.settings.session_cookie_name, services.cookies.issue(admin.id)
-    )
+    """A client carrying the cookie of a live session."""
+    async with services.sessionmaker() as session:
+        token = await services.sessions.open(session, admin.id, "pytest")
+        await session.commit()
+    client.cookies.set(services.settings.session_cookie_name, token)
     return client
 
 

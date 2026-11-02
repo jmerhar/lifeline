@@ -1,43 +1,36 @@
-"""Setting and clearing the browser's login cookie."""
+"""Setting and clearing the browser's login cookie, through jigkit.
+
+The Secure flag follows ``COOKIE_SECURE``, else the request's scheme, which uvicorn takes from
+X-Forwarded-Proto only when the proxy is one it believes (``FORWARDED_ALLOW_IPS``).
+"""
 
 from fastapi import Request, Response
+from jigkit.auth import clear_session_cookie as _clear
+from jigkit.auth import issue_session_cookie as _issue
 
 from .deps import Services
 
 
-def _secure_for(request: Request, services: Services) -> bool:
-    """Whether the cookie should be marked Secure.
-
-    Follows the scheme the request actually arrived on unless a deployment overrides it, so
-    that an instance behind a TLS-terminating proxy gets a Secure cookie while one reached
-    over plain HTTP on a private network can still log in at all — a Secure cookie is
-    discarded by the browser there, which looks exactly like a rejected password.
-    """
-    override = services.settings.cookie_secure
-    if override is not None:
-        return override
-    forwarded = request.headers.get("x-forwarded-proto", "")
-    return request.url.scheme == "https" or forwarded.split(",")[0].strip() == "https"
-
-
 def issue_session_cookie(
-    response: Response, services: Services, user_id: int, request: Request
+    response: Response, services: Services, token: str, request: Request
 ) -> None:
-    """Log the browser in."""
+    """Log the browser in with ``token``."""
     settings = services.settings
-    response.set_cookie(
-        settings.session_cookie_name,
-        services.cookies.issue(user_id),
-        max_age=settings.session_lifetime_hours * 3600,
-        httponly=True,
-        secure=_secure_for(request, services),
-        # Lax rather than Strict: the cookie must survive following a link into the UI from
-        # a notification, which Strict would refuse.
-        samesite="lax",
-        path="/",
+    _issue(
+        response,
+        request,
+        name=settings.session_cookie_name,
+        token=token,
+        max_age_seconds=settings.session_lifetime_hours * 3600,
+        secure=settings.cookie_secure,
     )
 
 
-def clear_session_cookie(response: Response, services: Services) -> None:
+def clear_session_cookie(response: Response, services: Services, request: Request) -> None:
     """Log the browser out."""
-    response.delete_cookie(services.settings.session_cookie_name, path="/")
+    _clear(
+        response,
+        request,
+        name=services.settings.session_cookie_name,
+        secure=services.settings.cookie_secure,
+    )
