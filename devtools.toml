@@ -3,6 +3,7 @@
 ref = "v1"
 files = [
   "make/devtools.mk",
+  "config/ruff.toml",
   "bin/dev.sh",
 ]
 coverage = true
