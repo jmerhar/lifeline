@@ -16,7 +16,6 @@ import type {
   Settings,
   Site,
   SiteWrite,
-  SetupState,
   User,
 } from "./types";
 
@@ -113,8 +112,7 @@ export const api = {
     request<DetectedRules>(`/sites/${id}/detect`, { method: "POST" }),
   testRules: (id: number, rules: RuleTrial) =>
     request<RuleTrialResult>(`/sites/${id}/test-rules`, { method: "POST", ...json(rules) }),
-  setupState: () => request<SetupState>("/setup"),
-  completeSetup: (payload: { username: string; password: string; token?: string }) =>
+  completeSetup: (payload: { username: string; password: string }) =>
     request<User>("/setup", { method: "POST", ...json(payload) }),
 
   me: () => request<User>("/auth/me"),

@@ -11,9 +11,6 @@ from pathlib import Path
 
 from jigkit.settings import AppSettings
 
-# Sentinel accepted by ``setup_token`` to run the first-run wizard without a token.
-SETUP_TOKEN_DISABLED = "off"
-
 
 class Settings(AppSettings):
     """Everything the application reads from its environment."""
@@ -24,11 +21,6 @@ class Settings(AppSettings):
     # absent both — generated into the data directory on first boot (see services.crypto).
     secret_key: str | None = None
     secret_key_file: Path | None = None
-
-    # Guards the first-run wizard. Unset generates one and logs it; SETUP_TOKEN_DISABLED
-    # turns the guard off for an instance that is not reachable from the internet.
-    setup_token: str | None = None
-    setup_token_file: Path | None = None
 
     auth_disabled: bool = False
     session_cookie_name: str = "lifeline_session"
@@ -51,11 +43,6 @@ class Settings(AppSettings):
         "Chrome/131.0.0.0 Safari/537.36"
     )
     request_timeout_seconds: float = 30.0
-
-    @property
-    def setup_token_disabled(self) -> bool:
-        """Whether the first-run wizard has deliberately been left unguarded."""
-        return self.setup_token == SETUP_TOKEN_DISABLED
 
     @property
     def secret_key_path(self) -> Path:

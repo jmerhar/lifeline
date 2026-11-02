@@ -210,10 +210,7 @@ export interface paths {
          * Complete
          * @description Create the administrator and log the browser in.
          *
-         *     Guarded by a token printed to the container's log. This instance may be reachable from
-         *     the internet before anyone has configured it, and without the token whoever found the
-         *     URL first would own it. Held under a lock, so two requests at once cannot both create an
-         *     administrator.
+         *     Held under a lock, so two requests at once cannot both create an administrator.
          */
         post: operations["complete_api_setup_post"];
         delete?: never;
@@ -800,8 +797,6 @@ export interface components {
         SetupRequest: {
             /** Password */
             password: string;
-            /** Token */
-            token?: string | null;
             /** Username */
             username: string;
         };
@@ -812,8 +807,6 @@ export interface components {
         SetupState: {
             /** Setup Required */
             setup_required: boolean;
-            /** Token Required */
-            token_required: boolean;
         };
         /**
          * SiteRead

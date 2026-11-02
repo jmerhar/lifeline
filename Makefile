@@ -29,12 +29,12 @@ dev: ## Start the stack with hot reload (API on :8000, interface on :5173)
 
 up: ## Build and start the production stack
 	docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
-	@echo "Interface: http://127.0.0.1:8000 — the setup token is in 'make logs'."
+	@echo "Interface: http://127.0.0.1:8000"
 
 down: ## Stop the stack, keeping the data
 	docker compose down
 
-logs: ## Follow the container's log (where the setup token is printed)
+logs: ## Follow the container's log
 	docker compose logs -f
 
 shell: ## Open a shell in the running container

@@ -710,17 +710,6 @@
             "title": "Password",
             "type": "string"
           },
-          "token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Token"
-          },
           "username": {
             "maxLength": 120,
             "minLength": 1,
@@ -741,15 +730,10 @@
           "setup_required": {
             "title": "Setup Required",
             "type": "boolean"
-          },
-          "token_required": {
-            "title": "Token Required",
-            "type": "boolean"
           }
         },
         "required": [
-          "setup_required",
-          "token_required"
+          "setup_required"
         ],
         "title": "SetupState",
         "type": "object"
@@ -1594,7 +1578,7 @@
         ]
       },
       "post": {
-        "description": "Create the administrator and log the browser in.\n\nGuarded by a token printed to the container's log. This instance may be reachable from\nthe internet before anyone has configured it, and without the token whoever found the\nURL first would own it. Held under a lock, so two requests at once cannot both create an\nadministrator.",
+        "description": "Create the administrator and log the browser in.\n\nHeld under a lock, so two requests at once cannot both create an administrator.",
         "operationId": "complete_api_setup_post",
         "requestBody": {
           "content": {

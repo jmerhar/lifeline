@@ -1,10 +1,4 @@
-/**
- * The first screen a new instance shows.
- *
- * The token is asked for because this instance may be reachable from the internet before
- * anyone has configured it, and without it whoever found the URL first would own it. Where
- * to find the token is printed on the screen rather than left to be looked up.
- */
+/** The first screen a new instance shows: creating the administrator account. */
 
 import { useState } from "react";
 
@@ -12,17 +6,10 @@ import { api, ApiError } from "../api/client";
 import { Wordmark } from "../components/Mark";
 import { Button, Card, Field, Input, Problem } from "../components/ui";
 
-export function Setup({
-  tokenRequired,
-  onDone,
-}: {
-  tokenRequired: boolean;
-  onDone: () => void;
-}) {
+export function Setup({ onDone }: { onDone: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,11 +24,7 @@ export function Setup({
     }
     setBusy(true);
     try {
-      await api.completeSetup({
-        username,
-        password,
-        ...(tokenRequired ? { token } : {}),
-      });
+      await api.completeSetup({ username, password });
       onDone();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Setup could not be completed.");
@@ -62,21 +45,6 @@ export function Setup({
 
       <Card className="p-4">
         <form onSubmit={submit} className="flex flex-col gap-4">
-          {tokenRequired ? (
-            <Field
-              label="Setup token"
-              hint="Printed in this container's log at startup: docker compose logs lifeline"
-            >
-              <Input
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-              />
-            </Field>
-          ) : null}
-
           <Field label="Username">
             <Input
               value={username}

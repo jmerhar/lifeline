@@ -21,7 +21,6 @@ services:
       LOG_LEVEL: DEBUG
       # The interface is served by Vite here, so the API serves no static files.
       STATIC_DIR: ""
-      SETUP_TOKEN: dev-setup-token
       SECRET_KEY: dev-secret-key-not-for-production
     volumes:
       - ./data:/data

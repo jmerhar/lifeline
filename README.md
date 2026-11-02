@@ -54,15 +54,8 @@ docker compose up -d
 One file is all it takes; there is nothing to clone or build. `data` is created first because
 Docker would otherwise create it as root, and the container does not run as root.
 
-Then open <http://127.0.0.1:8000>. The first screen asks for a **setup token**, which is
-printed in the container's log:
-
-```bash
-docker compose logs lifeline | grep "setup token"
-```
-
-That token is what stops whoever finds the URL first from claiming the instance. Create your
-account and you are in.
+Then open <http://127.0.0.1:8000> and create your account; whoever opens it first does, so do
+that before making it reachable from elsewhere.
 
 Everything the container keeps lives in `./data` — the SQLite database, the encryption key it
 generates on first boot, and one browser profile per site. Back that directory up and there
@@ -75,7 +68,6 @@ Every setting has a working default; `.env.example` lists them. The ones worth k
 | Variable | Default | What it does |
 |---|---|---|
 | `LIFELINE_BIND` / `LIFELINE_PORT` | `127.0.0.1` / `8000` | Where the interface is published. The default assumes a reverse proxy in front. |
-| `SETUP_TOKEN` | generated | Guards the first-run wizard. `off` disables it — only where nobody else can reach the interface. |
 | `SECRET_KEY` | generated into `./data` | Encrypts the stored sessions. **Losing it means logging into every site again.** |
 | `PUBLIC_URL` | | The address people open the interface at, such as `https://lifeline.example.com`. Writes from any other origin are refused. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1,172.16.0.0/12` | Proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed: addresses or networks. Not `*`, which lets a client choose the address the login throttle counts. |

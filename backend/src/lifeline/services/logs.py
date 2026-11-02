@@ -1,8 +1,7 @@
 """Where the application's log goes, through jigkit's logging setup.
 
-Two destinations. The stream is what ``docker logs`` shows, and the first-run setup token is only
-ever printed there; losing it would make a new deployment unusable. The file lives in the mounted
-data directory, so it survives the container being recreated and can be read from the host.
+Two destinations. The stream is what ``docker logs`` shows. The file lives in the mounted data
+directory, so it survives the container being recreated and can be read from the host.
 
 The level is a runtime setting rather than only an environment variable, because the moment you
 need DEBUG is the moment something is failing, and restarting the container to get it loses

@@ -86,14 +86,6 @@ class TestBlankSettings:
         assert settings.secret_key is None
         assert load_or_create_secret(settings)
 
-    def test_an_empty_setup_token_means_generate_one(self, data_dir: Path) -> None:
-        from lifeline.api.app import resolve_setup_token
-
-        settings = Settings(data_dir=data_dir, setup_token="")
-
-        assert settings.setup_token is None
-        assert resolve_setup_token(settings)
-
     def test_an_empty_database_url_falls_back_to_the_data_directory(self, data_dir: Path) -> None:
         settings = Settings(data_dir=data_dir, database_url="")
 

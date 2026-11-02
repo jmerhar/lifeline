@@ -143,8 +143,6 @@ class SetupState(BaseModel):
     """Whether this instance still needs configuring."""
 
     setup_required: bool
-    # Whether the wizard demands the token from the container log.
-    token_required: bool
 
 
 class SetupRequest(BaseModel):
@@ -152,9 +150,6 @@ class SetupRequest(BaseModel):
 
     username: Annotated[str, Field(min_length=1, max_length=120)]
     password: Annotated[str, Field(min_length=1)]
-    # Printed to the log at startup. Required unless the deployment turned it off, so that
-    # an instance exposed to the internet cannot be claimed by whoever finds it first.
-    token: str | None = None
 
 
 class LoginRequest(BaseModel):

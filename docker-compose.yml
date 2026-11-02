@@ -23,10 +23,6 @@ services:
     mem_limit: 2g
     environment:
       TZ: ${TZ:-UTC}
-      # Unset, a token is generated and printed to this container's log at startup, and the
-      # first-run wizard asks for it. Set it to `off` only on a network where the interface
-      # is not reachable by anyone else.
-      SETUP_TOKEN: ${SETUP_TOKEN:-}
       # Unset, an encryption key is generated into ./data on first boot. Supply one to keep
       # it outside the data directory; losing it means logging into every site again.
       SECRET_KEY: ${SECRET_KEY:-}

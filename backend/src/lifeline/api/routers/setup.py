@@ -1,7 +1,6 @@
 """The first-run wizard."""
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from jigkit.auth import setup_token_matches
 from sqlalchemy import func, select
 
 from ...models import User
@@ -19,12 +18,9 @@ async def _user_count(db: DbDep) -> int:
 
 
 @router.get("")
-async def state(db: DbDep, request: Request) -> SetupState:
+async def state(db: DbDep) -> SetupState:
     """Whether this instance still needs an administrator."""
-    return SetupState(
-        setup_required=await _user_count(db) == 0,
-        token_required=request.app.state.setup_token is not None,
-    )
+    return SetupState(setup_required=await _user_count(db) == 0)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -37,10 +33,7 @@ async def complete(
 ) -> UserRead:
     """Create the administrator and log the browser in.
 
-    Guarded by a token printed to the container's log. This instance may be reachable from
-    the internet before anyone has configured it, and without the token whoever found the
-    URL first would own it. Held under a lock, so two requests at once cannot both create an
-    administrator.
+    Held under a lock, so two requests at once cannot both create an administrator.
     """
     async with services.setup_lock:
         return await _complete(payload, db, services, request, response)
@@ -59,21 +52,6 @@ async def _complete(
             status_code=status.HTTP_409_CONFLICT, detail="this instance is already set up"
         )
 
-    expected = request.app.state.setup_token
-    if expected is None and not services.settings.setup_token_disabled:
-        # No token was minted because there was an administrator when the process started, and
-        # there is none now. Whatever emptied the user table — a restore, an edit outside the
-        # application — must not leave the wizard open to whoever asks first.
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="restart lifeline to set it up again; it will print a new setup token",
-        )
-    if not setup_token_matches(expected, payload.token):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="the setup token does not match the one in the container log",
-        )
-
     try:
         password_hash = hash_password(payload.password)
     except PasswordTooShort as exc:
@@ -88,8 +66,6 @@ async def _complete(
     await load_settings_row(db)
     await db.flush()
 
-    # The token is single-use: setup is complete, so nothing may run it again.
-    request.app.state.setup_token = None
     token = await services.sessions.open(db, user.id, request.headers.get("user-agent", ""))
     issue_session_cookie(response, services, token, request)
     return UserRead.model_validate(user)

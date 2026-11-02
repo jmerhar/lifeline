@@ -17,9 +17,6 @@ export const handlers = [
     HttpResponse.json({ id: 1, username: "jure", last_login_at: null }),
   ),
   http.post("/api/auth/logout", () => HttpResponse.json({ detail: "logged out" })),
-  http.get("/api/setup", () =>
-    HttpResponse.json({ setup_required: false, token_required: true }),
-  ),
   http.get("/api/sites", () => HttpResponse.json([makeSite()])),
   http.get("/api/settings", () => HttpResponse.json(makeSettings())),
   http.get("/api/checks", () => HttpResponse.json([makeCheck()])),
@@ -28,9 +25,6 @@ export const handlers = [
 /** The API answering "nobody has configured this instance yet". */
 export const setupRequired = [
   http.get("/api/auth/me", () => HttpResponse.json({ detail: "setup_required" }, { status: 409 })),
-  http.get("/api/setup", () =>
-    HttpResponse.json({ setup_required: true, token_required: true }),
-  ),
 ];
 
 /** The API answering "you are not logged in". */

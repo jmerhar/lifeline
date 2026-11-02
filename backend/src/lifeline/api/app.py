@@ -5,7 +5,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from jigkit.auth import resolve_setup_token as jigkit_resolve_setup_token
 from jigkit.web import (
     health_router,
     install_security_headers,
@@ -15,7 +14,7 @@ from jigkit.web import (
 from sqlalchemy import text
 
 from .. import __version__
-from ..config import SETUP_TOKEN_DISABLED, Settings, get_settings
+from ..config import Settings, get_settings
 from ..services import logs
 from .deps import build_services
 from .routers import auth, browser, checks, setup, sites
@@ -34,54 +33,6 @@ async def check_database(request: Request) -> None:
         await connection.execute(text("SELECT 1"))
 
 
-def resolve_setup_token(settings: Settings) -> str | None:
-    """The token the first-run wizard will demand, or None if it is switched off.
-
-    Generated when none is configured, so an instance reachable from the internet before
-    anyone has set it up cannot be claimed by whoever finds the URL first. It is not
-    persisted: a restart before setup is a fine moment to mint a new one, and after setup it
-    is never needed again.
-    """
-    return jigkit_resolve_setup_token(settings.setup_token)
-
-
-async def setup_is_pending(services: object) -> bool:
-    """Whether this instance still has no administrator.
-
-    Read once at startup to decide whether a setup token is needed at all. An unreadable
-    database is treated as pending: minting a token the wizard will reject costs nothing,
-    whereas skipping it would leave the wizard unguarded if the database turns out to be
-    empty.
-    """
-    from sqlalchemy import func, select
-    from sqlalchemy.exc import SQLAlchemyError
-
-    from ..models import User
-
-    try:
-        async with services.sessionmaker() as session:  # type: ignore[attr-defined]
-            count = (await session.execute(select(func.count()).select_from(User))).scalar_one()
-    except SQLAlchemyError:
-        return True
-    return count == 0
-
-
-def _announce(token: str | None) -> None:
-    if token is None:
-        logger.warning(
-            "the first-run wizard is unguarded (SETUP_TOKEN=%s); do not expose this "
-            "instance until an administrator has been created",
-            SETUP_TOKEN_DISABLED,
-        )
-        return
-    # Deliberately loud and easy to copy: this is the one secret a new deployment has to
-    # find, and it is only ever printed here.
-    logger.info("=" * 72)
-    logger.info("first-run setup token: %s", token)
-    logger.info("open the web interface and use it to create the administrator account")
-    logger.info("=" * 72)
-
-
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the application."""
     settings = settings or get_settings()
@@ -96,14 +47,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if log_file is not None:
             logger.info("logging to %s", log_file)
         await _apply_stored_log_level(services)
-        # Only while there is nobody to log in as. Printing it on every restart of a
-        # configured instance puts a live-looking secret in the log for no reason, and trains
-        # whoever reads that log to ignore the one time it matters.
-        if await setup_is_pending(services):
-            app.state.setup_token = resolve_setup_token(settings)
-            _announce(app.state.setup_token)
-        else:
-            app.state.setup_token = None
         # A container that was killed rather than shut down leaves an X server and a browser
         # holding a profile directory, which stops the next login from opening it.
         await services.browser.reap_orphans()

@@ -25,7 +25,6 @@ export type SiteWrite = Schema["SiteWrite"];
 export type Site = Schema["SiteRead"];
 export type Check = Schema["CheckRead"];
 export type Settings = Schema["SettingsRead"];
-export type SetupState = Schema["SetupState"];
 export type User = Schema["UserRead"];
 export type LoginSession = Schema["LoginSessionRead"];
 export type DetectedRules = Schema["DetectedRules"];

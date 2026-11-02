@@ -34,8 +34,7 @@ class TestConfigure:
         assert "a line worth keeping" in path.read_text()
 
     def test_keeps_logging_to_the_stream(self, settings: Settings) -> None:
-        # `docker logs` is where the first-run setup token is printed, and it is printed nowhere
-        # else — losing the stream would make a new deployment unusable.
+        # `docker logs` is where a container's log is read, so the stream stays beside the file.
         logs.configure(settings)
 
         kinds = {type(handler).__name__ for handler in logging.getLogger().handlers}

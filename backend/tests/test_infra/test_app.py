@@ -1,37 +1,12 @@
-"""Building the application: the setup token, and serving the built frontend."""
+"""Building the application: serving the built frontend, its guards, and its lifespan."""
 
 from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy.exc import OperationalError
 
-from lifeline.api.app import create_app, resolve_setup_token, setup_is_pending
-from lifeline.config import SETUP_TOKEN_DISABLED, Settings
-from lifeline.models import User
-
-
-class TestSetupToken:
-    def test_uses_a_configured_token(self, settings: Settings) -> None:
-        assert resolve_setup_token(settings) == "test-setup-token"
-
-    def test_generates_one_when_none_is_configured(self, data_dir: Path) -> None:
-        # An instance can be reachable before anyone has set it up; without a token, whoever
-        # found the URL first would own it.
-        token = resolve_setup_token(Settings(data_dir=data_dir))
-
-        assert token
-        assert len(token) >= 8
-
-    def test_generates_a_different_token_each_time(self, data_dir: Path) -> None:
-        settings = Settings(data_dir=data_dir)
-
-        assert resolve_setup_token(settings) != resolve_setup_token(settings)
-
-    def test_can_be_switched_off(self, data_dir: Path) -> None:
-        settings = Settings(data_dir=data_dir, setup_token=SETUP_TOKEN_DISABLED)
-
-        assert resolve_setup_token(settings) is None
+from lifeline.api.app import create_app
+from lifeline.config import Settings
 
 
 class TestFrontendServing:
@@ -50,7 +25,6 @@ class TestFrontendServing:
         app = create_app(services.settings.model_copy(update={"static_dir": built}))
         # The lifespan is not run, so the services are attached by hand; see the app fixture.
         app.state.services = services
-        app.state.setup_token = None
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://lifeline.test") as c:
             yield c
@@ -97,7 +71,6 @@ class TestFrontendServing:
         # How the dev stack runs: Vite serves the app and proxies the API.
         app = create_app(services.settings.model_copy(update={"static_dir": data_dir / "absent"}))
         app.state.services = services
-        app.state.setup_token = None
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://lifeline.test") as c:
             assert (await c.get("/api/health")).status_code == 200
@@ -158,64 +131,8 @@ class TestLifespan:
 
         async with app.router.lifespan_context(app):
             assert app.state.services is not None
-            assert app.state.setup_token == "test-setup-token"
             services = app.state.services
 
         # The engine is closed on the way out; using it afterwards is what would leak a
         # connection per restart in a reloading dev server.
         assert services.engine.pool.checkedout() == 0
-
-    async def test_announces_an_unguarded_wizard(
-        self, settings: Settings, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        import logging
-
-        app = create_app(settings.model_copy(update={"setup_token": SETUP_TOKEN_DISABLED}))
-
-        with caplog.at_level(logging.WARNING):
-            async with app.router.lifespan_context(app):
-                pass
-
-        assert app.state.setup_token is None
-        assert "unguarded" in caplog.text
-
-    async def test_prints_the_setup_token(
-        self, settings: Settings, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        # The one secret a new deployment has to find, and it is only ever printed here.
-        import logging
-
-        app = create_app(settings)
-
-        with caplog.at_level(logging.INFO):
-            async with app.router.lifespan_context(app):
-                pass
-
-        assert "test-setup-token" in caplog.text
-
-    async def test_says_nothing_once_an_administrator_exists(
-        self, settings: Settings, admin: User, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        # A configured instance restarting has no wizard to guard, and a token in its log is a
-        # live-looking secret that means nothing.
-        import logging
-
-        app = create_app(settings)
-
-        with caplog.at_level(logging.INFO):
-            async with app.router.lifespan_context(app):
-                assert app.state.setup_token is None
-
-        assert "test-setup-token" not in caplog.text
-
-    async def test_guards_the_wizard_when_the_database_cannot_be_read(self) -> None:
-        # Guessing "already set up" from a failed read would leave the wizard open on an
-        # instance that turns out to be empty.
-        assert await setup_is_pending(_BrokenServices())
-
-
-class _BrokenServices:
-    """Services whose database refuses to answer."""
-
-    def sessionmaker(self) -> object:
-        raise OperationalError("select", {}, Exception("no such table"))

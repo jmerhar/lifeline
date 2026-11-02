@@ -19,16 +19,6 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Set up lifeline" })).toBeInTheDocument();
   });
 
-  it("asks for the setup token, and says where to find it", async () => {
-    // Whoever finds the URL first must not be able to claim the instance.
-    server.use(...setupRequired);
-
-    render(<App />);
-
-    expect(await screen.findByLabelText(/Setup token/)).toBeInTheDocument();
-    expect(screen.getByText(/docker compose logs lifeline/)).toBeInTheDocument();
-  });
-
   it("shows the login form when nobody is logged in", async () => {
     server.use(...loggedOut);
 

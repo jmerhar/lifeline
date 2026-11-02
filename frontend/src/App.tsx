@@ -22,7 +22,7 @@ import { Sites } from "./pages/Sites";
 
 type Gate =
   | { state: "loading" }
-  | { state: "setup"; tokenRequired: boolean }
+  | { state: "setup" }
   | { state: "login" }
   | { state: "ready" };
 
@@ -37,24 +37,12 @@ export function App() {
     retry: false,
   });
 
-  const setup = useQuery({
-    queryKey: ["setup"],
-    queryFn: api.setupState,
-    enabled: session.error instanceof SetupRequired,
-    retry: false,
-  });
-
-  const gate = resolve(session, setup);
+  const gate = resolve(session);
 
   if (gate.state === "loading") return <Spinner label="Starting…" />;
 
   if (gate.state === "setup") {
-    return (
-      <Setup
-        tokenRequired={gate.tokenRequired}
-        onDone={() => client.invalidateQueries()}
-      />
-    );
+    return <Setup onDone={() => client.invalidateQueries()} />;
   }
 
   if (gate.state === "login") {
@@ -83,15 +71,9 @@ export function App() {
   );
 }
 
-function resolve(
-  session: { isPending: boolean; error: unknown },
-  setup: { data?: { token_required: boolean }; isPending: boolean },
-): Gate {
+function resolve(session: { isPending: boolean; error: unknown }): Gate {
   if (session.isPending) return { state: "loading" };
-  if (session.error instanceof SetupRequired) {
-    if (setup.isPending) return { state: "loading" };
-    return { state: "setup", tokenRequired: setup.data?.token_required ?? true };
-  }
+  if (session.error instanceof SetupRequired) return { state: "setup" };
   if (session.error instanceof NotAuthenticated) return { state: "login" };
   return { state: "ready" };
 }
