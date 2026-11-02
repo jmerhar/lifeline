@@ -63,10 +63,10 @@ coverage: ## Run both suites with coverage and print the combined summary
 	bin/coverage.sh --format md
 
 lint: ## ShellCheck, TypeScript and ESLint
-	bin/lint.sh
+	.devtools/bin/lint.sh
 
 openapi: ## Re-export the API schema and regenerate the frontend's types
-	bin/openapi.sh
+	.devtools/bin/openapi.sh
 
 contract: openapi ## Check the committed schema and generated types are up to date
 	@git diff --exit-code frontend/openapi.json frontend/src/types/api.d.ts \
@@ -74,7 +74,7 @@ contract: openapi ## Check the committed schema and generated types are up to da
 	@echo "schema and types are current"
 
 inspect: ## Run IntelliJ IDEA CLI inspections
-	bin/inspect.sh
+	.devtools/bin/inspect.sh
 
 check: lint contract test coverage ## Everything (gate a commit on this)
 
@@ -95,7 +95,7 @@ node-modules: ## Reinstall the frontend packages
 	cd frontend && rm -rf node_modules && npm install --no-fund --no-audit
 
 lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
-	bin/lockfile.sh
+	.devtools/bin/lockfile.sh
 
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \

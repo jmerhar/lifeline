@@ -126,10 +126,13 @@ jobs:
           pip install -e backend
           cd frontend && npm ci
 
+      - name: Fetch the shared tooling
+        run: bin/devtools-fetch.sh
+
       - name: Regenerate the schema and types
         env:
           PYTHON: python
-        run: bin/openapi.sh
+        run: .devtools/bin/openapi.sh
 
       - name: Check the committed copies are current
         run: git diff --exit-code frontend/openapi.json frontend/src/types/api.d.ts
@@ -138,11 +141,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      # The shared scripts from jmerhar/devtools, at the ref devtools.toml pins.
+      - name: Fetch the shared tooling
+        run: bin/devtools-fetch.sh
+
       - name: ShellCheck
         run: shellcheck bin/*.sh
 
       - name: Lockfile resolves only to the public registry
-        run: bin/check-lockfile.sh
+        run: .devtools/bin/check-lockfile.sh
 
   coverage:
     # Joins both suites into one summary, gate, Codecov upload and publish. The suites run in

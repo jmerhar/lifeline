@@ -5,9 +5,37 @@ files = [
   "make/devtools.mk",
   "config/ruff.toml",
   "bin/dev.sh",
+  "bin/lint.sh",
+  "bin/check-lockfile.sh",
+  "bin/lockfile.sh",
+  "bin/openapi.sh",
+  "bin/export-openapi.py",
+  "bin/inspect.sh",
 ]
 coverage = true
 
 # The stack `make dev` starts with hot reload.
 [dev]
 compose_files = ["docker-compose.yml", "docker-compose.dev.yml"]
+
+# Every check `make lint` runs, then the backend's and the frontend's own.
+[lint]
+checks = ["shellcheck", "lockfile"]
+extra = [
+  ["backend lint", "cd backend && .venv/bin/ruff check ."],
+  ["frontend types", "cd frontend && npx tsc -b --force"],
+  ["frontend lint", "cd frontend && npx eslint ."],
+]
+
+# The frontend, whose lockfile resolves only to the public registry.
+[npm]
+dirs = ["frontend"]
+
+# The committed schema and the frontend's types generated from it (`make openapi`).
+[openapi]
+app = "lifeline.api.schema:build_app"
+schema = "frontend/openapi.json"
+types = "frontend/src/types/api.d.ts"
+# The frontend's forms and pages read the generated types as complete objects, so a field with a
+# default is required in them.
+defaults_optional = false
