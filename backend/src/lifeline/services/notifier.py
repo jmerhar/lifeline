@@ -1,18 +1,19 @@
-"""Sending notifications through Apprise.
+"""Which events are worth a notification, in what words, and how often.
 
-One URL list covers email, Telegram, ntfy, Discord and the rest, so the tool needs no
-per-transport configuration of its own and gains new destinations by upgrading a library
-rather than by growing code.
+Delivery is jigkit's Apprise sender: one URL list covers email, Telegram, ntfy, Discord and the
+rest, so lifeline needs no per-transport configuration of its own.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Protocol
+
+from jigkit.notify import AppriseSender, Sender, redact_url
 
 from ..models import Setting, Site
+
+__all__ = ["AppriseSender", "Event", "Notification", "Notifier", "Sender", "build"]
 
 logger = logging.getLogger(__name__)
 
@@ -44,50 +45,6 @@ class Notification:
     event: Event
     title: str
     body: str
-
-
-class Sender(Protocol):
-    """Delivers a notification to every configured destination."""
-
-    async def send(self, urls: list[str], title: str, body: str) -> bool:
-        """Return whether at least one destination accepted the message."""
-        ...
-
-
-class AppriseSender:
-    """Sends through Apprise.
-
-    Apprise is synchronous and does network IO, so it runs in a worker thread: called
-    directly it would block the event loop, stalling every other check and the web UI for
-    as long as the slowest destination takes to answer.
-    """
-
-    async def send(self, urls: list[str], title: str, body: str) -> bool:
-        return await asyncio.to_thread(self._send, urls, title, body)
-
-    @staticmethod
-    def _send(urls: list[str], title: str, body: str) -> bool:
-        import apprise
-
-        client = apprise.Apprise()
-        for url in urls:
-            if not client.add(url):
-                logger.warning("apprise rejected a destination: %s", _redact(url))
-        if not len(client):
-            return False
-        return bool(client.notify(title=title, body=body))
-
-
-def _redact(url: str) -> str:
-    """A notification URL with its credentials removed, for logging.
-
-    An Apprise URL is mostly credential — a bot token, an SMTP password — so logging one
-    verbatim writes a working secret into the container's log.
-    """
-    scheme, separator, rest = url.partition("://")
-    if not separator:
-        return "<malformed url>"
-    return f"{scheme}://…" if not rest else f"{scheme}://…{rest[-4:]}"
 
 
 def _describe(site: Site) -> str:
@@ -199,7 +156,7 @@ class Notifier:
                 "notified about %s%s via %s",
                 event,
                 f" for {site.name}" if site else "",
-                ", ".join(_redact(url) for url in urls),
+                ", ".join(redact_url(url) for url in urls),
             )
         else:
             logger.warning("no destination accepted the %s notification", event)

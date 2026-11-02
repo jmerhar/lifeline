@@ -1,15 +1,13 @@
-"""The background loop that keeps checks happening.
+"""The background work that keeps checks happening, on jigkit's tick loop.
 
-A plain asyncio loop rather than a scheduling library: the requirement is "check whatever
-is due, once a minute", the due time already lives on each site's row, and a loop small
-enough to read in one screen can be driven directly by a test — a tick is a method call,
-not a wait.
+Each tick checks whatever is due, refreshes the risk warnings and prunes history; the due time
+already lives on each site's row. A tick is a method call, so a test drives it directly.
 """
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 
+from jigkit.scheduler import TickLoop
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..config import Settings
@@ -36,7 +34,13 @@ class Scheduler:
         self._settings = settings
         self._runner = runner
         self._notifier = notifier
-        self._task: asyncio.Task[None] | None = None
+        # Looked up on each tick rather than bound now, so a test can replace ``tick``.
+        self._loop = TickLoop(
+            lambda: self.tick(),
+            settings.scheduler_tick_seconds,
+            enabled=settings.scheduler_enabled,
+            name="lifeline-scheduler",
+        )
 
     async def tick(self, *, now: datetime | None = None) -> None:
         """Do one round of work."""
@@ -80,37 +84,15 @@ class Scheduler:
         if removed:
             logger.info("pruned %d check(s) past the retention window", removed)
 
-    async def _loop(self) -> None:
-        interval = self._settings.scheduler_tick_seconds
-        while True:
-            try:
-                await self.tick()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                # The loop must outlive any one failure: a scheduler that dies on a bad tick
-                # stops every future check without saying so.
-                logger.exception("scheduler tick failed")
-            await asyncio.sleep(interval)
+    @property
+    def running(self) -> bool:
+        """Whether the loop is ticking."""
+        return self._loop.running
 
     def start(self) -> None:
         """Begin ticking, if the deployment wants a scheduler at all."""
-        if not self._settings.scheduler_enabled:
-            logger.info("scheduler disabled by configuration")
-            return
-        if self._task is not None:
-            return
-        self._task = asyncio.create_task(self._loop(), name="lifeline-scheduler")
-        logger.info("scheduler started, ticking every %ds", self._settings.scheduler_tick_seconds)
+        self._loop.start()
 
     async def stop(self) -> None:
         """Stop ticking and wait for the loop to unwind."""
-        if self._task is None:
-            return
-        self._task.cancel()
-        try:
-            await self._task
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self._task = None
+        await self._loop.stop()
