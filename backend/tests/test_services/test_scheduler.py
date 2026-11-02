@@ -129,7 +129,7 @@ class TestLifecycle:
 
         scheduler.start()
 
-        assert scheduler._task is None
+        assert not scheduler.running
 
     async def test_stopping_an_unstarted_scheduler_is_harmless(
         self, build_scheduler: Callable[..., Scheduler]
@@ -142,20 +142,22 @@ class TestLifecycle:
         scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=60)
         try:
             scheduler.start()
-            first = scheduler._task
+            first = scheduler._loop._task
             scheduler.start()
 
-            assert scheduler._task is first
+            assert scheduler._loop._task is first
         finally:
             await scheduler.stop()
 
-        assert scheduler._task is None
+        assert not scheduler.running
 
     async def test_the_loop_outlives_a_failing_tick(
         self, build_scheduler: Callable[..., Scheduler], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # A scheduler that dies on one bad tick silently stops every future check.
-        scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=0)
+        scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=1)
+        # No pause between ticks, so the second follows the failed first at once.
+        monkeypatch.setattr(scheduler._loop, "_interval", 0)
         ticked_twice = asyncio.Event()
         calls: list[int] = []
 

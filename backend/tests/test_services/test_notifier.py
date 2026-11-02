@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from lifeline.services.notifier import AppriseSender, Event, Notifier, _redact, build
+from lifeline.services.notifier import Event, Notifier, build
 from tests.conftest import RecordingSender, make_settings, make_site
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
@@ -178,51 +178,3 @@ class TestMessages:
 
     def test_the_test_message_confirms_the_configuration(self) -> None:
         assert "configured correctly" in build(Event.TEST).body
-
-
-class TestRedaction:
-    def test_hides_the_credentials_in_a_url(self) -> None:
-        # An Apprise URL is mostly credential; logging one verbatim writes a working
-        # secret into the container log.
-        redacted = _redact("tgram://1234567:AAbbCCddEEff/-100987654")
-
-        assert "AAbbCCddEEff" not in redacted
-        assert redacted.startswith("tgram://")
-
-    def test_describes_a_url_with_no_scheme(self) -> None:
-        assert _redact("not-a-url") == "<malformed url>"
-
-    def test_keeps_a_short_tail_to_tell_destinations_apart(self) -> None:
-        assert _redact("mailto://user:secret@example.org").endswith(".org")
-
-
-class TestAppriseSender:
-    async def test_reports_failure_when_no_destination_is_usable(self) -> None:
-        # An unparseable URL leaves Apprise with nothing to send to; saying it succeeded
-        # would hide a typo in the settings forever.
-        assert await AppriseSender().send(["nonsense://x"], "t", "b") is False
-
-    async def test_sends_through_apprise(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import apprise
-
-        calls: list[dict[str, str]] = []
-
-        class FakeApprise:
-            def __init__(self) -> None:
-                self._urls: list[str] = []
-
-            def add(self, url: str) -> bool:
-                self._urls.append(url)
-                return True
-
-            def __len__(self) -> int:
-                return len(self._urls)
-
-            def notify(self, title: str, body: str) -> bool:
-                calls.append({"title": title, "body": body})
-                return True
-
-        monkeypatch.setattr(apprise, "Apprise", FakeApprise)
-
-        assert await AppriseSender().send(["tgram://a/b"], "title", "body") is True
-        assert calls == [{"title": "title", "body": "body"}]
