@@ -47,24 +47,8 @@ Homepage = "https://github.com/jmerhar/lifeline"
 packages = ["src/lifeline"]
 
 [tool.ruff]
-# Matches the width the code is already written to, and what the frontend's formatter uses.
-line-length = 100
-target-version = "py314"
-
-[tool.ruff.lint]
-# On top of the defaults (pyflakes and pycodestyle errors): unused arguments and imports,
-# comprehension and builtin misuse, and the bug-prone patterns in flake8-bugbear — mutable
-# default arguments and `except` clauses that swallow everything among them.
-select = ["E", "F", "W", "I", "B", "C4", "UP", "ARG", "SIM"]
-
-[tool.ruff.lint.per-file-ignores]
-# A pytest fixture is very often requested for what it does rather than for its value — `admin`
-# creates the administrator, `services` installs the stand-ins — and naming it in the signature is
-# the only way to ask for it.
-"tests/**" = ["ARG001", "ARG002"]
-# Written by `alembic revision --autogenerate`; reflowing them by hand would be undone by the
-# next generated migration.
-"alembic/versions/*" = ["E501", "W291"]
+# The rules are the shared ones from jmerhar/devtools, fetched into .devtools/ by `make`.
+extend = "../.devtools/config/ruff.toml"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
