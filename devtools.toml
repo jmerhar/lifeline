@@ -1,0 +1,12 @@
+# Shared build tooling from jmerhar/devtools, fetched into .devtools/ by bin/devtools-fetch.sh.
+[fetch]
+ref = "v1"
+files = [
+  "make/devtools.mk",
+  "bin/dev.sh",
+]
+coverage = true
+
+# The stack `make dev` starts with hot reload.
+[dev]
+compose_files = ["docker-compose.yml", "docker-compose.dev.yml"]

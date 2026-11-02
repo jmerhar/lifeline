@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Run both suites with coverage and print the combined summary.
 #
-# The summary and the gate are shared tooling from jmerhar/coverage, configured by
-# coverage.toml, so the numbers here are the ones CI enforces.
+# The summary and the gate are shared tooling from jmerhar/coverage, fetched with the rest of the
+# shared tooling and configured by coverage.toml, so the numbers here are the ones CI enforces.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-bin/coverage-tooling.sh
+bin/devtools-fetch.sh
 
 bin/test-backend.sh \
   --cov=lifeline \
@@ -25,4 +25,4 @@ else
 fi
 
 echo
-python3 .coverage-report.py "$@"
+python3 .devtools/coverage/coverage-report.py "$@"
