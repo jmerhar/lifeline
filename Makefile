@@ -1,11 +1,14 @@
-.PHONY: help install browser dev up down logs shell build test test-backend test-frontend \
+.PHONY: install browser dev up down logs shell build test test-backend test-frontend \
         test-browser coverage lint openapi contract inspect check migrate revision \
         db-shell node-modules \
         lockfile clean
 
-help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*##|^##@' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*## "}; /^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0, 5); next} {printf "  \033[36mmake %-16s\033[0m %s\n", $$1, $$2}'
+# help, devtools-update and coverage-tooling come from jmerhar/devtools; make fetches them on the
+# first run and whenever devtools.toml changes.
+.DEFAULT_GOAL := help
+include .devtools/make/devtools.mk
+.devtools/make/devtools.mk: devtools.toml bin/devtools-fetch.sh
+	bin/devtools-fetch.sh
 
 ##@ Setup
 
@@ -22,7 +25,7 @@ browser: ## Download the Chromium build Playwright drives
 ##@ Development
 
 dev: ## Start the stack with hot reload (API on :8000, interface on :5173)
-	bin/dev.sh
+	.devtools/bin/dev.sh
 
 up: ## Build and start the production stack
 	docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
@@ -97,5 +100,5 @@ lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \
 	       backend/junit frontend/coverage frontend/dist frontend/tsconfig.tsbuildinfo \
-	       coverage-upload .coverage-report.py inspect
+	       coverage-upload inspect
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
