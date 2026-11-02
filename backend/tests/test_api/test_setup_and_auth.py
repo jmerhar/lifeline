@@ -254,14 +254,24 @@ class TestAuthorisation:
 
         assert (await client.get("/api/sites")).status_code == 401
 
-    async def test_refuses_a_cookie_whose_user_is_gone(
-        self, client: httpx.AsyncClient, admin: User, services, db: AsyncSession
+    async def test_a_session_ends_with_its_user(
+        self, logged_in: httpx.AsyncClient, admin: User, db: AsyncSession
     ) -> None:
-        client.cookies.set(
-            services.settings.session_cookie_name, services.cookies.issue(admin.id + 99)
-        )
+        # ON DELETE CASCADE removes the user's sessions with the user.
+        await db.delete(admin)
+        await db.commit()
 
-        assert (await client.get("/api/sites")).status_code == 401
+        assert (await logged_in.get("/api/sites")).status_code in (401, 409)
+
+    async def test_logging_out_ends_the_session_for_good(
+        self, logged_in: httpx.AsyncClient, services
+    ) -> None:
+        # A copy of the cookie taken before logout must not still work afterwards.
+        token = logged_in.cookies.get(services.settings.session_cookie_name)
+        await logged_in.post("/api/auth/logout")
+        logged_in.cookies.set(services.settings.session_cookie_name, token)
+
+        assert (await logged_in.get("/api/sites")).status_code == 401
 
     async def test_accepts_a_valid_cookie(self, logged_in: httpx.AsyncClient) -> None:
         assert (await logged_in.get("/api/sites")).status_code == 200
@@ -275,18 +285,34 @@ class TestAuthorisation:
     async def test_reports_who_is_logged_in(self, logged_in: httpx.AsyncClient) -> None:
         assert (await logged_in.get("/api/auth/me")).json()["username"] == "jure"
 
-    async def test_the_cookie_is_marked_secure_behind_a_tls_proxy(
+    async def test_the_cookie_is_marked_secure_for_an_https_request(
+        self, app, admin: User
+    ) -> None:
+        # Behind a TLS-terminating proxy uvicorn makes the request's scheme https, from the
+        # X-Forwarded-Proto of a proxy listed in FORWARDED_ALLOW_IPS.
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://lifeline.test",
+            headers={"X-Requested-With": "lifeline"},
+        ) as client:
+            response = await client.post(
+                "/api/auth/login", json={"username": "jure", "password": GOOD_PASSWORD}
+            )
+
+        assert "Secure" in response.headers["set-cookie"]
+
+    async def test_a_forwarded_proto_header_alone_does_not_make_it_secure(
         self, client: httpx.AsyncClient, admin: User
     ) -> None:
-        # The proxy terminates TLS, so the request arrives over plain HTTP; without reading
-        # the forwarded scheme the cookie would go out without Secure.
+        # Any client can send the header; only uvicorn, believing a trusted proxy, may act on it.
         response = await client.post(
             "/api/auth/login",
             json={"username": "jure", "password": GOOD_PASSWORD},
             headers={"x-forwarded-proto": "https"},
         )
 
-        assert "Secure" in response.headers["set-cookie"]
+        assert "Secure" not in response.headers["set-cookie"]
 
     async def test_the_cookie_is_not_secure_over_plain_http(
         self, client: httpx.AsyncClient, admin: User

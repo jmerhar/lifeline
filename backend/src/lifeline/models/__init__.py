@@ -9,6 +9,7 @@ from jigkit.models import Base, TimestampMixin, UtcDateTime, utcnow
 
 from .check import Check
 from .enums import CaptureMethod, CheckOutcome, PingMethod, SiteStatus
+from .login_session import LoginSession
 from .setting import SETTINGS_ID, Setting
 from .site import Site
 from .site_session import SiteSession
@@ -20,6 +21,7 @@ __all__ = [
     "CaptureMethod",
     "Check",
     "CheckOutcome",
+    "LoginSession",
     "PingMethod",
     "Setting",
     "Site",

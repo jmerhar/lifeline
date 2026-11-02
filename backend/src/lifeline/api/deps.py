@@ -1,11 +1,12 @@
 """The wiring every request handler draws on."""
 
+import asyncio
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
-from datetime import timedelta
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from jigkit.auth.sessions import SessionStore
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -17,7 +18,7 @@ from ..services.detect import Detector
 from ..services.notifier import Notifier
 from ..services.runner import CheckRunner
 from ..services.scheduler import Scheduler
-from .security import LoginThrottle, SessionCookies
+from .security import LoginThrottle, login_sessions
 
 # Returned instead of 401 while the instance has no administrator, so the UI knows to show
 # the first-run wizard rather than a login form it cannot get past.
@@ -36,10 +37,13 @@ class Services:
     notifier: Notifier
     runner: CheckRunner
     scheduler: Scheduler
-    cookies: SessionCookies
+    sessions: SessionStore
     throttle: LoginThrottle
     browser: BrowserManager
     detector: Detector
+    #: Held while the first-run setup creates the administrator, so two requests at once cannot
+    #: both find no administrator and both create one.
+    setup_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 def get_services(request: Request) -> Services:
@@ -88,18 +92,10 @@ async def require_user(request: Request, services: ServicesDep, db: DbDep) -> Us
         return None
 
     token = request.cookies.get(services.settings.session_cookie_name)
-    user_id = services.cookies.read(token) if token else None
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
-        )
-    user = await db.get(User, user_id)
-    if user is None:
-        # The cookie is valid but its user is gone; treat it as no cookie at all.
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
-        )
-    return user
+    session = await services.sessions.find(db, token) if token else None
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated")
+    return session.user
 
 
 UserDep = Annotated[User | None, Depends(require_user)]
@@ -133,21 +129,8 @@ def build_services(settings: Settings) -> Services:
         notifier=notifier,
         runner=runner,
         scheduler=scheduler,
-        cookies=SessionCookies(
-            cipher_secret(settings), timedelta(hours=settings.session_lifetime_hours)
-        ),
+        sessions=login_sessions(settings),
         throttle=LoginThrottle(settings.login_rate_limit_per_minute),
         browser=browser,
         detector=Detector(settings, browser),
     )
-
-
-def cipher_secret(settings: Settings) -> str:
-    """The secret the session cookie is signed with.
-
-    The same secret as the session store uses: rotating it invalidates browser logins and
-    stored sessions together, which is the honest behaviour — both were protected by it.
-    """
-    from ..services.crypto import load_or_create_secret
-
-    return load_or_create_secret(settings)

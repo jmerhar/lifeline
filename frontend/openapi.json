@@ -1238,7 +1238,7 @@
   "paths": {
     "/api/auth/login": {
       "post": {
-        "description": "Check a password and log the browser in.",
+        "description": "Check a password and log the browser in.\n\nOnly failures count against the throttle, so logging in and out again is never refused.",
         "operationId": "login_api_auth_login_post",
         "requestBody": {
           "content": {
@@ -1280,7 +1280,7 @@
     },
     "/api/auth/logout": {
       "post": {
-        "description": "Log the browser out.",
+        "description": "Log the browser out, ending its session so the cookie cannot be used again.",
         "operationId": "logout_api_auth_logout_post",
         "responses": {
           "200": {
@@ -1594,7 +1594,7 @@
         ]
       },
       "post": {
-        "description": "Create the administrator and log the browser in.\n\nGuarded by a token printed to the container's log. This instance may be reachable from\nthe internet before anyone has configured it, and without the token whoever found the\nURL first would own it.",
+        "description": "Create the administrator and log the browser in.\n\nGuarded by a token printed to the container's log. This instance may be reachable from\nthe internet before anyone has configured it, and without the token whoever found the\nURL first would own it. Held under a lock, so two requests at once cannot both create an\nadministrator.",
         "operationId": "complete_api_setup_post",
         "requestBody": {
           "content": {

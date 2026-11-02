@@ -16,6 +16,8 @@ export interface paths {
         /**
          * Login
          * @description Check a password and log the browser in.
+         *
+         *     Only failures count against the throttle, so logging in and out again is never refused.
          */
         post: operations["login_api_auth_login_post"];
         delete?: never;
@@ -35,7 +37,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Log the browser out.
+         * @description Log the browser out, ending its session so the cookie cannot be used again.
          */
         post: operations["logout_api_auth_logout_post"];
         delete?: never;
@@ -210,7 +212,8 @@ export interface paths {
          *
          *     Guarded by a token printed to the container's log. This instance may be reachable from
          *     the internet before anyone has configured it, and without the token whoever found the
-         *     URL first would own it.
+         *     URL first would own it. Held under a lock, so two requests at once cannot both create an
+         *     administrator.
          */
         post: operations["complete_api_setup_post"];
         delete?: never;
