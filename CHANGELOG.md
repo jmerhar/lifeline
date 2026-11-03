@@ -5,7 +5,7 @@ Every release of lifeline, newest first. The image is `ghcr.io/jmerhar/lifeline`
 needs something done by whoever runs it says what under **Upgrading**. Before 1.0, a minor release
 may.
 
-## Unreleased
+## 0.1.0 — 2026-11-03
 
 The first versioned release. Until now the image was published only as `latest`, from every
 change to the main branch.
