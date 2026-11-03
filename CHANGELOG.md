@@ -5,6 +5,19 @@ Every release of lifeline, newest first. The image is `ghcr.io/jmerhar/lifeline`
 needs something done by whoever runs it says what under **Upgrading**. Before 1.0, a minor release
 may.
 
+## Unreleased
+
+### Added
+
+- A footer names the version running and, for an image built by CI, links the commit it was
+  built from.
+
+### Changed
+
+- The image built from every change to the main branch is tagged `edge`, as other images built
+  on jigkit are, rather than `latest`. A deployment that followed `latest` should follow `edge`
+  or a release line such as `0.1`.
+
 ## 0.1.0 — 2026-11-03
 
 The first versioned release. Until now the image was published only as `latest`, from every
