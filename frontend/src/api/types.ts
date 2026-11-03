@@ -28,6 +28,7 @@ export type Settings = Schema["SettingsRead"];
 export type User = Schema["UserRead"];
 export type LoginSession = Schema["LoginSessionRead"];
 export type DetectedRules = Schema["DetectedRules"];
+export type Health = Schema["Health"];
 export type RuleTrial = Schema["RuleTrial"];
 export type RuleTrialResult = Schema["RuleTrialResult"];
 export type RuleOutcome = Schema["RuleOutcomeRead"];

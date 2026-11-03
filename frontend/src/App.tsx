@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { api, NotAuthenticated, SetupRequired } from "./api/client";
+import { Footer } from "./components/Footer";
 import { TopNav } from "./components/TopNav";
 import { Spinner } from "./components/ui";
 import { useTheme } from "./hooks/useTheme";
@@ -42,11 +43,21 @@ export function App() {
   if (gate.state === "loading") return <Spinner label="Starting…" />;
 
   if (gate.state === "setup") {
-    return <Setup onDone={() => client.invalidateQueries()} />;
+    return (
+      <>
+        <Setup onDone={() => client.invalidateQueries()} />
+        <Footer />
+      </>
+    );
   }
 
   if (gate.state === "login") {
-    return <Login onLoggedIn={() => client.invalidateQueries()} />;
+    return (
+      <>
+        <Login onLoggedIn={() => client.invalidateQueries()} />
+        <Footer />
+      </>
+    );
   }
 
   return (
@@ -67,6 +78,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <Footer />
     </div>
   );
 }

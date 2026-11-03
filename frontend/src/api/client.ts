@@ -10,6 +10,7 @@
 import type {
   Check,
   DetectedRules,
+  Health,
   LoginSession,
   RuleTrial,
   RuleTrialResult,
@@ -115,6 +116,7 @@ export const api = {
   completeSetup: (payload: { username: string; password: string }) =>
     request<User>("/setup", { method: "POST", ...json(payload) }),
 
+  health: () => request<Health>("/health"),
   me: () => request<User>("/auth/me"),
   login: (payload: { username: string; password: string }) =>
     request<User>("/auth/login", { method: "POST", ...json(payload) }),

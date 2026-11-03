@@ -10,6 +10,9 @@ import { http, HttpResponse } from "msw";
 import { makeCheck, makeSettings, makeSite } from "./factories";
 
 export const handlers = [
+  http.get("/api/health", () =>
+    HttpResponse.json({ status: "ok", database: "connected", version: "0.1.0", revision: null }),
+  ),
   http.get("/api/auth/me", () =>
     HttpResponse.json({ id: 1, username: "jure", last_login_at: null }),
   ),
