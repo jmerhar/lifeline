@@ -9,7 +9,8 @@
 # else to keep.
 services:
   lifeline:
-    image: ghcr.io/jmerhar/lifeline:latest
+    # The release line: every release that keeps these settings and the stored data working.
+    image: ghcr.io/jmerhar/lifeline:0.1
     container_name: lifeline
     restart: unless-stopped
     # A browser is a tree of processes, and PID 1 has to reap the ones it orphans.

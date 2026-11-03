@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lifeline"
-version = "0.1.0"
+version = "0.1.0.dev0"
 description = "Keep logged-in website sessions alive with scheduled pings"
 requires-python = ">=3.14"
 dependencies = [

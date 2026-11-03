@@ -3,8 +3,10 @@ name: Test and Publish
 on:
   # push is limited to main because pull_request already covers branch work; triggering on
   # both would run the whole suite twice for every pull request.
+  # A release tag (v1.2.3) publishes that version's image and its GitHub release.
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch: {}
@@ -152,6 +154,10 @@ jobs:
       - name: Lockfile resolves only to the public registry
         run: .devtools/bin/check-lockfile.sh
 
+      # Every manifest names one version; a release tag must name it, with its changelog notes.
+      - name: Versions agree
+        run: python3 .devtools/bin/version.py check ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
   coverage:
     # Joins both suites into one summary, gate, Codecov upload and publish. The suites run in
     # separate jobs, so this is where their reports are brought together.
@@ -225,11 +231,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
-          # A moving tag for deployments that follow the branch, and an immutable one so a
-          # specific build can always be pinned or rolled back to.
+          # latest for deployments that follow the branch, an immutable tag so a specific build
+          # can always be pinned or rolled back to, and on a release tag its version, minor and
+          # major line (the action makes no bare major tag for a 0.x release, which version.py's
+          # compose pin allows for).
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - uses: docker/build-push-action@v7
         with:
@@ -237,5 +248,24 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: REVISION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    # The GitHub release for a version, once its image is published.
+    needs: [publish]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the shared tooling
+        run: bin/devtools-fetch.sh
+
+      - name: Create the GitHub release from the changelog
+        run: .devtools/bin/github-release.sh "${{ github.ref_name }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

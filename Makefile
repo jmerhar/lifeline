@@ -1,7 +1,7 @@
 .PHONY: install browser dev up down logs shell build test test-backend test-frontend \
         test-browser coverage lint openapi contract inspect check migrate revision \
         db-shell node-modules \
-        lockfile clean
+        lockfile release clean
 
 # help, devtools-update and coverage-tooling come from jmerhar/devtools; make fetches them on the
 # first run and whenever devtools.toml changes.
@@ -89,13 +89,18 @@ revision: ## Generate a migration from the models (usage: make revision m="what 
 db-shell: ## Open a SQLite shell on the development database
 	sqlite3 data/lifeline.db
 
+##@ Releasing
+
+lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
+	.devtools/bin/lockfile.sh
+
+release: ## Cut a release from CHANGELOG.md (usage: make release VERSION=X.Y.Z; then push both)
+	.devtools/bin/release.sh $(VERSION)
+
 ##@ Housekeeping
 
 node-modules: ## Reinstall the frontend packages
 	cd frontend && rm -rf node_modules && npm install --no-fund --no-audit
-
-lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
-	.devtools/bin/lockfile.sh
 
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \

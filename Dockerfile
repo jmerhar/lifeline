@@ -67,6 +67,11 @@ COPY backend/alembic ./alembic
 COPY --from=frontend /build/dist ./static
 COPY bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 
+# The commit the image was built from, which the health check reports beside the version.
+# Declared late, so a new commit does not invalidate the layers above.
+ARG REVISION=""
+ENV REVISION=$REVISION
+
 # Runs as an unprivileged user so that everything it writes into the mounted data directory
 # is owned by a real account on the host rather than by root.
 RUN mkdir -p /data /home/app && chown -R 1000:1000 /data /home/app

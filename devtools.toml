@@ -11,6 +11,9 @@ files = [
   "bin/openapi.sh",
   "bin/export-openapi.py",
   "bin/inspect.sh",
+  "bin/version.py",
+  "bin/release.sh",
+  "bin/github-release.sh",
 ]
 coverage = true
 
@@ -20,7 +23,7 @@ compose_files = ["docker-compose.yml", "docker-compose.dev.yml"]
 
 # Every check `make lint` runs, then the backend's and the frontend's own.
 [lint]
-checks = ["shellcheck", "lockfile"]
+checks = ["shellcheck", "lockfile", "version"]
 extra = [
   ["backend lint", "cd backend && .venv/bin/ruff check ."],
   ["frontend types", "cd frontend && npx tsc -b --force"],
@@ -39,3 +42,15 @@ types = "frontend/src/types/api.d.ts"
 # The frontend's forms and pages read the generated types as complete objects, so a field with a
 # default is required in them.
 defaults_optional = false
+
+# Where the release version is written; the compose file follows the image's release line.
+[version]
+pyprojects = ["backend/pyproject.toml"]
+npm = ["frontend"]
+images = ["ghcr.io/jmerhar/lifeline"]
+
+[release]
+title = "lifeline"
+# An editable install records the version it was installed at, so a local run reports a new one
+# only once the virtualenv is reinstalled; the image installs afresh.
+note = "Run make install for a local make dev to report the new version."
