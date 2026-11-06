@@ -1,0 +1,25 @@
+name: CI
+
+# The suites and image in devtools.toml's [ci] section, run by jmerhar/devtools' shared workflow.
+on:
+  # push is limited to main because pull_request already covers branch work; triggering on both
+  # would run everything twice for every pull request. A release tag (v1.2.3) publishes that
+  # version's image and its GitHub release.
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: jmerhar/devtools/.github/workflows/python-docker-app.yml@v1
+    permissions:
+      contents: write
+      packages: write
+      statuses: write
+    secrets: inherit

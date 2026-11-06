@@ -14,6 +14,7 @@ files = [
   "bin/version.py",
   "bin/release.sh",
   "bin/github-release.sh",
+  "bin/ci.py",
 ]
 coverage = true
 
@@ -54,3 +55,48 @@ title = "lifeline"
 # An editable install records the version it was installed at, so a local run reports a new one
 # only once the virtualenv is reinstalled; the image installs afresh.
 note = "Run make install for a local make dev to report the new version."
+
+# CI, run by jmerhar/devtools' python-docker-app.yml (.github/workflows/ci.yml): each suite is a job,
+# the image is built once all of them and the coverage gate pass, and a version tag gets its
+# GitHub release.
+[ci]
+junit = ["backend/junit/*.xml"]
+coverage_description = "Backend + frontend HTML coverage report"
+# Pull requests do not build the image, which installs a browser and takes minutes.
+images_on_pull_request = false
+
+# The browser tests drive Chromium on a virtual display, which xvfb-run starts and stops around
+# the suite.
+[[ci.suite]]
+name = "backend"
+python = true
+setup = "sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb x11vnc"
+install = 'pip install -e "backend[test]" && python -m playwright install --with-deps chromium'
+run = "xvfb-run --server-num 77 --server-args '-screen 0 1280x800x24' bin/test-backend.sh -v --junitxml=junit/backend.xml --cov=lifeline --cov-report=term-missing --cov-report=xml --cov-report=json --cov-report=html"
+env = { PYTHON = "python", LIFELINE_TEST_DISPLAY = ":77" }
+coverage = ["backend/coverage.xml", "backend/coverage.json", "backend/htmlcov", "backend/junit"]
+
+[[ci.suite]]
+name = "frontend"
+node = true
+install = "npm ci --prefix frontend"
+run = "cd frontend && npx tsc -b --force && npx eslint . && npx vitest run --coverage"
+coverage = ["frontend/coverage"]
+
+# The frontend's types are generated from the API's schema; regenerating and diffing makes a
+# changed response model without `make openapi` fail the build.
+[[ci.suite]]
+name = "contract"
+python = true
+node = true
+install = "pip install -e backend && npm ci --prefix frontend"
+run = ".devtools/bin/openapi.sh && git diff --exit-code frontend/openapi.json frontend/src/types/api.d.ts"
+env = { PYTHON = "python" }
+
+# The checks that need nothing installed; make lint adds the backend's and frontend's own.
+[[ci.suite]]
+name = "lint"
+run = 'shellcheck bin/*.sh && .devtools/bin/check-lockfile.sh && python3 .devtools/bin/version.py check ${RELEASE_TAG:+"$RELEASE_TAG"}'
+
+[[ci.image]]
+image = "ghcr.io/jmerhar/lifeline"
