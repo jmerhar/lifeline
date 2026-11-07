@@ -10,7 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     # Settings, database, migrations, logging and the health probe shared with the other apps
     # built on it. Pinned exactly; Dependabot proposes each new release.
-    "jigkit[auth,db,notify,web]==0.5.1",
+    "jigkit[auth,db,notify,web]==0.12.0",
     "fastapi>=0.162.0,<0.163",
     "uvicorn[standard]>=0.54.0",
     "sqlalchemy[asyncio]>=2.1.6",
@@ -23,7 +23,7 @@ dependencies = [
     "apprise>=2.1.0",
     # The websocket client side of the noVNC bridge. uvicorn[standard] brings the
     # server half; this is what the bridge dials websockify with.
-    "websockets>=17.3",
+    "websockets>=17.4",
     # Imported lazily by services.browser.supervisor, so neither the tests nor a
     # cookie-import-only deployment need a browser binary on disk.
     "playwright>=1.64.1",
@@ -31,9 +31,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "jigkit[testing]==0.5.1",
+    "jigkit[testing]==0.12.0",
     "pytest>=9.2.0",
-    "pytest-asyncio>=1.4.1",
+    "pytest-asyncio>=1.4.1.post1",
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
     "ruff>=0.17.3",
