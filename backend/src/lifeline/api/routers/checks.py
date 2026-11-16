@@ -1,17 +1,13 @@
 """The history view across every site."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from sqlalchemy import select
 
 from ...models import Check
 from ...schemas import CheckRead
-from ..deps import DbDep, require_setup_complete, require_user
+from ..deps import DbDep
 
-router = APIRouter(
-    prefix="/checks",
-    tags=["checks"],
-    dependencies=[Depends(require_setup_complete), Depends(require_user)],
-)
+router = APIRouter(prefix="/checks", tags=["checks"])
 
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500

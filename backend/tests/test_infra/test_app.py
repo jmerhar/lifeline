@@ -1,12 +1,16 @@
 """Building the application: serving the built frontend, its guards, and its lifespan."""
 
+import re
 from pathlib import Path
 
 import httpx
 import pytest
+from fastapi import FastAPI
+from jigkit.web import route_templates
 
-from lifeline.api.app import create_app
+from lifeline.api.app import ACCESS_POLICY, API_PREFIX, create_app
 from lifeline.config import Settings
+from lifeline.models import User
 
 
 class TestFrontendServing:
@@ -123,6 +127,46 @@ class TestRequestGuards:
 
         assert response.headers["x-content-type-options"] == "nosniff"
         assert response.headers["x-frame-options"] == "DENY"
+
+
+class TestAccessPolicy:
+    def test_every_open_route_exists(self, app: FastAPI) -> None:
+        # A typo, or a route since removed, would leave a declaration that opens nothing — or,
+        # once a route of that name is added, opens it without anyone deciding to.
+        assert ACCESS_POLICY.unknown(app) == set()
+
+    async def test_every_other_route_needs_a_login(
+        self, app: FastAPI, client: httpx.AsyncClient, admin: User
+    ) -> None:
+        guarded = {
+            (method, path)
+            for method, path in route_templates(app) - ACCESS_POLICY.open_routes
+            if path.startswith(API_PREFIX)
+        }
+        assert guarded, "the route table came back empty"
+
+        refused = {}
+        for method, path in sorted(guarded):
+            url = re.sub(r"\{[^}]+\}", "1", path)
+            response = await client.request(method, url, json={})
+            refused[(method, path)] = response.status_code
+
+        assert refused == dict.fromkeys(guarded, 401)
+
+    async def test_before_setup_it_asks_for_setup_rather_than_a_login(
+        self, client: httpx.AsyncClient
+    ) -> None:
+        response = await client.get("/api/sites")
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "setup_required"}
+
+    async def test_the_open_routes_answer_without_a_login(
+        self, client: httpx.AsyncClient, admin: User
+    ) -> None:
+        assert (await client.get("/api/health")).status_code == 200
+        assert (await client.get("/api/setup")).status_code == 200
+        assert (await client.post("/api/auth/logout")).status_code == 200
 
 
 class TestLifespan:

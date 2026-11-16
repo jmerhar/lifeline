@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from ...models import CaptureMethod, Setting, Site, SiteStatus
 from ...schemas import (
@@ -32,13 +32,9 @@ from ...services.store import (
     pulse_for_sites,
     recent_checks,
 )
-from ..deps import DbDep, ServicesDep, require_setup_complete, require_user
+from ..deps import DbDep, ServicesDep
 
-router = APIRouter(
-    prefix="/sites",
-    tags=["sites"],
-    dependencies=[Depends(require_setup_complete), Depends(require_user)],
-)
+router = APIRouter(prefix="/sites", tags=["sites"])
 
 # How many recent checks the pulse strip shows.
 PULSE_LENGTH = 12

@@ -1,18 +1,14 @@
 """Reading and changing the instance settings."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
 from ...schemas import Message, SettingsRead, SettingsWrite
 from ...services import logs
 from ...services.notifier import Event
 from ...services.store import load_settings_row
-from ..deps import DbDep, ServicesDep, require_setup_complete, require_user
+from ..deps import DbDep, ServicesDep
 
-router = APIRouter(
-    prefix="/settings",
-    tags=["settings"],
-    dependencies=[Depends(require_setup_complete), Depends(require_user)],
-)
+router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 @router.get("")

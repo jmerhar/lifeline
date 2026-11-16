@@ -9,21 +9,23 @@ HTTP authentication challenge.
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 
 from ...models import CaptureMethod
 from ...schemas import Message
 from ...services.browser.bridge import pump
 from ...services.browser.manager import NoSuchLoginSession
-from ..deps import DbDep, ServicesDep, require_setup_complete, require_user
+from ..deps import DbDep, ServicesDep
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/browser", tags=["browser"])
-GUARDED = [Depends(require_setup_complete), Depends(require_user)]
+#: The stream, mounted outside the access policy: the session's unguessable token is what
+#: admits it, and the policy's check reads an HTTP request, which a websocket is not.
+stream_router = APIRouter(prefix="/browser", tags=["browser"])
 
 
-@router.post("/{token}/save", dependencies=GUARDED)
+@router.post("/{token}/save")
 async def save_session(token: str, db: DbDep, services: ServicesDep) -> Message:
     """Store the session the live browser is holding, then close it."""
     try:
@@ -47,7 +49,7 @@ async def save_session(token: str, db: DbDep, services: ServicesDep) -> Message:
     return Message(detail="session saved")
 
 
-@router.delete("/{token}", dependencies=GUARDED)
+@router.delete("/{token}")
 async def close_login(token: str, services: ServicesDep) -> Message:
     """Abandon a login session without saving it."""
     try:
@@ -60,7 +62,7 @@ async def close_login(token: str, services: ServicesDep) -> Message:
     return Message(detail="login session closed")
 
 
-@router.websocket("/{token}/ws")
+@stream_router.websocket("/{token}/ws")
 async def stream(websocket: WebSocket, token: str) -> None:
     """Carry the VNC protocol between the browser tab and the running X server."""
     services = websocket.app.state.services

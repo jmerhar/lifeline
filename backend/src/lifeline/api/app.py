@@ -4,8 +4,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
 from jigkit.web import (
+    AccessPolicy,
     health_router,
     install_security_headers,
     install_write_guard,
@@ -16,7 +17,7 @@ from sqlalchemy import text
 from .. import __version__
 from ..config import Settings, get_settings
 from ..services import logs
-from .deps import build_services
+from .deps import authorize, build_services
 from .routers import auth, browser, checks, setup, sites
 from .routers import settings as settings_router
 
@@ -25,6 +26,21 @@ logger = logging.getLogger(__name__)
 API_PREFIX = "/api"
 #: The value of the X-Requested-With header every write must carry; the interface sends it.
 WRITE_HEADER_VALUE = "lifeline"
+
+#: Every API route needs a logged-in administrator except these, which are what an unknown
+#: visitor needs to set the instance up or log in. Logging out is open so a browser holding an
+#: expired session can still clear its cookie.
+ACCESS_POLICY = AccessPolicy(
+    {
+        ("GET", f"{API_PREFIX}/health"),
+        ("GET", f"{API_PREFIX}/setup"),
+        ("POST", f"{API_PREFIX}/setup"),
+        ("POST", f"{API_PREFIX}/auth/login"),
+        ("POST", f"{API_PREFIX}/auth/logout"),
+    },
+    allow=authorize,
+    prefix=API_PREFIX,
+)
 
 
 async def check_database(request: Request) -> None:
@@ -70,12 +86,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=f"{API_PREFIX}/openapi.json",
     )
 
-    app.include_router(
-        health_router(check_database, version=__version__, revision=settings.revision),
-        prefix=API_PREFIX,
+    api = APIRouter(dependencies=[Depends(ACCESS_POLICY)])
+    api.include_router(
+        health_router(check_database, version=__version__, revision=settings.revision)
     )
     for module in (setup, auth, sites, checks, settings_router, browser):
-        app.include_router(module.router, prefix=API_PREFIX)
+        api.include_router(module.router)
+    app.include_router(api, prefix=API_PREFIX)
+    app.include_router(browser.stream_router, prefix=API_PREFIX)
     install_write_guard(
         app, value=WRITE_HEADER_VALUE, public_url=settings.public_url, prefix=API_PREFIX
     )

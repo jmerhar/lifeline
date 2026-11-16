@@ -73,12 +73,6 @@ async def _find_admin(session: AsyncSession) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def require_setup_complete(db: DbDep) -> None:
-    """Refuse ordinary requests until someone has been through the wizard."""
-    if await _find_admin(db) is None:
-        raise HTTPException(status_code=SETUP_REQUIRED_STATUS, detail=SETUP_REQUIRED_DETAIL)
-
-
 async def require_user(request: Request, services: ServicesDep, db: DbDep) -> User | None:
     """The logged-in administrator, or a refusal.
 
@@ -99,6 +93,18 @@ async def require_user(request: Request, services: ServicesDep, db: DbDep) -> Us
 
 
 UserDep = Annotated[User | None, Depends(require_user)]
+
+
+async def authorize(request: Request) -> bool:
+    """The access policy's credential: the same check as :func:`require_user`.
+
+    Raises its refusals rather than returning False, so the interface still tells "this instance
+    has not been set up" (409) from "nobody is logged in" (401).
+    """
+    services: Services = request.app.state.services
+    async with services.sessionmaker() as db:
+        await require_user(request, services, db)
+    return True
 
 
 def build_services(settings: Settings) -> Services:
