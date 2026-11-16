@@ -16,7 +16,7 @@ install: ## Create the backend virtualenv and install the frontend packages
 	python3 -m venv backend/.venv
 	backend/.venv/bin/pip install --quiet --upgrade pip
 	backend/.venv/bin/pip install --quiet -e "backend[test]"
-	cd frontend && npm install --no-fund --no-audit
+	cd frontend && npm ci --no-audit --no-fund --registry="$$(cd / && npm config get registry)"
 	@echo "Installed. 'make browser' adds the browser the interactive login needs."
 
 browser: ## Download the Chromium build Playwright drives
@@ -100,7 +100,7 @@ release: ## Cut a release from CHANGELOG.md (usage: make release VERSION=X.Y.Z; 
 ##@ Housekeeping
 
 node-modules: ## Reinstall the frontend packages
-	cd frontend && rm -rf node_modules && npm install --no-fund --no-audit
+	cd frontend && rm -rf node_modules && npm ci --no-audit --no-fund --registry="$$(cd / && npm config get registry)"
 
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \
