@@ -19,6 +19,21 @@ from tests.conftest import RecordingSender
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 
 
+class FakeTime:
+    """A monotonic clock that a sleep moves forward instead of waiting."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def clock(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += seconds
+        # Yields, so a test waiting on the loop gets to run between rounds.
+        await asyncio.sleep(0)
+
+
 @pytest.fixture
 def build_scheduler(
     sessionmaker: async_sessionmaker[AsyncSession],
@@ -28,25 +43,72 @@ def build_scheduler(
 ) -> Callable[..., Scheduler]:
     """Build a scheduler over the test runner."""
 
-    def build(**overrides: object) -> Scheduler:
+    def build(*, time: FakeTime | None = None, **overrides: object) -> Scheduler:
         return Scheduler(
             sessionmaker,
             settings.model_copy(update=overrides) if overrides else settings,
             make_runner(),
             notifier,
+            **({"clock": time.clock, "sleep": time.sleep} if time else {}),
         )
 
     return build
 
 
-class TestTick:
+class TestChecks:
     async def test_checks_the_sites_that_are_due(
         self, db: AsyncSession, site: Site, build_scheduler: Callable[..., Scheduler]
     ) -> None:
-        await build_scheduler().tick(now=NOW)
+        await build_scheduler().check_due(now=NOW)
 
         assert len((await db.execute(select(Check))).scalars().all()) == 1
 
+    async def test_sleeps_until_the_soonest_check(
+        self, db: AsyncSession, site: Site, build_scheduler: Callable[..., Scheduler]
+    ) -> None:
+        site.next_check_at = NOW + timedelta(minutes=10)
+        await db.commit()
+        time = FakeTime()
+        scheduler = build_scheduler(time=time, scheduler_tick_seconds=3600)
+
+        await scheduler.check_due(now=NOW)
+
+        assert scheduler._schedule._due["checks"] == 600
+
+    async def test_never_sleeps_longer_than_the_tick(
+        self, db: AsyncSession, site: Site, build_scheduler: Callable[..., Scheduler]
+    ) -> None:
+        site.next_check_at = NOW + timedelta(days=3)
+        await db.commit()
+        scheduler = build_scheduler(time=FakeTime(), scheduler_tick_seconds=300)
+
+        await scheduler.check_due(now=NOW)
+
+        assert scheduler._schedule._due["checks"] == 300
+
+    async def test_never_looks_again_sooner_than_a_minute(
+        self, db: AsyncSession, site: Site, build_scheduler: Callable[..., Scheduler]
+    ) -> None:
+        # However soon the next check is, the loop must not spin waiting for it.
+        site.next_check_at = NOW + timedelta(seconds=5)
+        await db.commit()
+        scheduler = build_scheduler(time=FakeTime(), scheduler_tick_seconds=300)
+
+        await scheduler.check_due(now=NOW)
+
+        assert scheduler._schedule._due["checks"] == 60
+
+    async def test_waits_the_full_tick_with_no_site_enabled(
+        self, build_scheduler: Callable[..., Scheduler]
+    ) -> None:
+        scheduler = build_scheduler(time=FakeTime(), scheduler_tick_seconds=300)
+
+        await scheduler.check_due(now=NOW)
+
+        assert scheduler._schedule._due["checks"] == 300
+
+
+class TestPrune:
     async def test_prunes_history_past_the_retention_window(
         self, db: AsyncSession, site: Site, build_scheduler: Callable[..., Scheduler]
     ) -> None:
@@ -59,11 +121,10 @@ class TestTick:
         )
         await db.commit()
 
-        await build_scheduler().tick(now=NOW)
+        await build_scheduler().prune(now=NOW)
 
         db.expunge_all()
-        remaining = (await db.execute(select(Check))).scalars().all()
-        assert all(check.started_at > NOW - timedelta(days=90) for check in remaining)
+        assert (await db.execute(select(Check))).scalars().all() == []
 
 
 class TestRiskRefresh:
@@ -85,7 +146,7 @@ class TestRiskRefresh:
         row.apprise_urls = "tgram://token/chat"
         await db.commit()
 
-        await build_scheduler().tick(now=NOW)
+        await build_scheduler().refresh_risk(now=NOW)
 
         db.expunge_all()
         assert (await db.get(Site, site.id)).status is SiteStatus.AT_RISK
@@ -100,7 +161,7 @@ class TestRiskRefresh:
         site.next_check_at = NOW + timedelta(days=3)
         await db.commit()
 
-        await build_scheduler().tick(now=NOW)
+        await build_scheduler().refresh_risk(now=NOW)
 
         db.expunge_all()
         assert (await db.get(Site, site.id)).status is SiteStatus.ALIVE
@@ -115,7 +176,7 @@ class TestRiskRefresh:
         site.next_check_at = NOW + timedelta(days=3)
         await db.commit()
 
-        await build_scheduler().tick(now=NOW)
+        await build_scheduler().refresh_risk(now=NOW)
 
         db.expunge_all()
         assert (await db.get(Site, site.id)).status is SiteStatus.LAPSED
@@ -139,40 +200,75 @@ class TestLifecycle:
     async def test_starts_once_and_stops_cleanly(
         self, build_scheduler: Callable[..., Scheduler]
     ) -> None:
-        scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=60)
+        scheduler = build_scheduler(scheduler_enabled=True)
         try:
             scheduler.start()
-            first = scheduler._loop._task
+            first = scheduler._task
             scheduler.start()
 
-            assert scheduler._loop._task is first
+            assert scheduler._task is first
         finally:
             await scheduler.stop()
 
         assert not scheduler.running
 
-    async def test_the_loop_outlives_a_failing_tick(
-        self, build_scheduler: Callable[..., Scheduler], monkeypatch: pytest.MonkeyPatch
+    async def test_runs_each_job_on_its_own_interval(
+        self, build_scheduler: Callable[..., Scheduler]
     ) -> None:
-        # A scheduler that dies on one bad tick silently stops every future check.
-        scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=1)
-        # No pause between ticks, so the second follows the failed first at once.
-        monkeypatch.setattr(scheduler._loop, "_interval", 0)
-        ticked_twice = asyncio.Event()
+        scheduler = build_scheduler(scheduler_tick_seconds=300)
+
+        assert {job.name: job.every for job in scheduler.jobs} == {
+            "checks": 300,
+            "risk": 60 * 60,
+            "prune": 24 * 60 * 60,
+        }
+
+    async def test_the_loop_outlives_a_failing_job(
+        self,
+        build_scheduler: Callable[..., Scheduler],
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # A scheduler that dies on one bad round silently stops every future check.
+        scheduler = build_scheduler(time=FakeTime(), scheduler_enabled=True)
+        ran_twice = asyncio.Event()
         calls: list[int] = []
 
-        async def failing_tick(**_: object) -> None:
+        async def failing_check(**_: object) -> None:
             calls.append(1)
             if len(calls) == 1:
                 raise RuntimeError("boom")
-            ticked_twice.set()
+            ran_twice.set()
 
-        monkeypatch.setattr(scheduler, "tick", failing_tick)
+        monkeypatch.setattr(scheduler, "check_due", failing_check)
 
         try:
             scheduler.start()
-            await asyncio.wait_for(ticked_twice.wait(), timeout=5)
+            await asyncio.wait_for(ran_twice.wait(), timeout=5)
         finally:
             await scheduler.stop()
 
         assert len(calls) >= 2
+        # With the traceback, which the schedule on its own would not log.
+        assert "the checks job failed" in caplog.text
+        assert "RuntimeError: boom" in caplog.text
+
+    async def test_waking_checks_at_once(
+        self, build_scheduler: Callable[..., Scheduler], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The real sleep: without the wake-up, the second look would be five minutes away.
+        scheduler = build_scheduler(scheduler_enabled=True, scheduler_tick_seconds=300)
+        looked = asyncio.Queue[int]()
+
+        async def recording_check(**_: object) -> None:
+            looked.put_nowait(1)
+
+        monkeypatch.setattr(scheduler, "check_due", recording_check)
+
+        try:
+            scheduler.start()
+            await asyncio.wait_for(looked.get(), timeout=5)
+            scheduler.wake()
+            await asyncio.wait_for(looked.get(), timeout=5)
+        finally:
+            await scheduler.stop()

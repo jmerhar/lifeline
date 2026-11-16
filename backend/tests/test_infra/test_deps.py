@@ -75,13 +75,14 @@ class TestGetSettings:
 
 
 class TestSchedulerSettings:
-    async def test_the_scheduler_ticks_every_five_minutes_by_default(
+    async def test_the_scheduler_looks_for_checks_every_five_minutes_by_default(
         self, data_dir: Path
     ) -> None:
         services = build_services(Settings(data_dir=data_dir, scheduler_enabled=False))
 
         try:
-            assert services.scheduler._loop._interval == 300
+            checks = next(job for job in services.scheduler.jobs if job.name == "checks")
+            assert checks.every == 300
         finally:
             await services.engine.dispose()
 

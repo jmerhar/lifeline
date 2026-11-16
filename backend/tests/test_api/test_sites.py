@@ -199,16 +199,13 @@ class TestSessionImport:
         assert site["user_agent"] == "Pasted/1.0"
 
     async def test_checks_the_imported_session_straight_away(
-        self, logged_in: httpx.AsyncClient, created: dict
+        self, logged_in: httpx.AsyncClient, created: dict, services
     ) -> None:
         await logged_in.post(
             f"/api/sites/{created['id']}/session/import", json={"text": "uid=1234"}
         )
 
-        checks = (await logged_in.get(f"/api/sites/{created['id']}/checks")).json()
-        site = (await logged_in.get(f"/api/sites/{created['id']}")).json()
-        assert [check["outcome"] for check in checks] == ["ok"]
-        assert site["status"] == SiteStatus.ALIVE
+        assert services.scheduler._wake.is_set()
 
     async def test_rejects_text_that_is_not_cookies(
         self, logged_in: httpx.AsyncClient, created: dict

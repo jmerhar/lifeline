@@ -49,6 +49,23 @@ async def due_sites(session: AsyncSession, now: datetime) -> list[Site]:
     return list(result.scalars())
 
 
+async def soonest_check(session: AsyncSession, now: datetime) -> datetime | None:
+    """When the next check of any enabled site falls due, or None if no site is enabled.
+
+    A site that has never been checked is due at ``now``, as :func:`due_sites` treats it.
+    """
+    result = await session.execute(
+        select(Site.next_check_at)
+        .where(Site.enabled.is_(True))
+        .order_by(Site.next_check_at.is_(None).desc(), Site.next_check_at)
+        .limit(1)
+    )
+    row = result.first()
+    if row is None:
+        return None
+    return row.next_check_at or now
+
+
 async def recent_checks(session: AsyncSession, site_id: int, limit: int) -> list[Check]:
     """A site's most recent checks, newest first."""
     result = await session.execute(

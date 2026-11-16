@@ -53,7 +53,7 @@ bin/                   every script the Makefile and CI run
 - **The Playwright driver reads its User-Agent from the first request the browser makes**,
   not by evaluating JavaScript in the page: evaluation fails outright mid-navigation, which
   is exactly when someone presses Save.
-- **`SiteStatus.AT_RISK` is recomputed on every scheduler tick**, not only after a check.
+- **`SiteStatus.AT_RISK` is recomputed hourly by the scheduler**, not only after a check.
   Both clocks that can run out — the site's inactivity deadline and a cookie's expiry — do so
   without anything failing.
 

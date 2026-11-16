@@ -13,6 +13,7 @@ from lifeline.services.store import (
     load_settings_row,
     prune_checks,
     recent_checks,
+    soonest_check,
 )
 from tests.conftest import make_settings, make_site
 
@@ -73,6 +74,36 @@ class TestSiteQueries:
 
     async def test_reports_a_missing_site_as_none(self, db: AsyncSession) -> None:
         assert await get_site(db, 999) is None
+
+
+class TestSoonestCheck:
+    async def test_is_the_earliest_next_check(self, db: AsyncSession) -> None:
+        db.add_all(
+            [
+                make_site(id=None, name="later", next_check_at=NOW + timedelta(days=2)),
+                make_site(id=None, name="sooner", next_check_at=NOW + timedelta(hours=1)),
+            ]
+        )
+        await db.commit()
+
+        assert await soonest_check(db, NOW) == NOW + timedelta(hours=1)
+
+    async def test_a_never_checked_site_is_due_now(self, db: AsyncSession) -> None:
+        db.add_all(
+            [
+                make_site(id=None, name="scheduled", next_check_at=NOW + timedelta(hours=1)),
+                make_site(id=None, name="new", next_check_at=None),
+            ]
+        )
+        await db.commit()
+
+        assert await soonest_check(db, NOW) == NOW
+
+    async def test_ignores_disabled_sites(self, db: AsyncSession) -> None:
+        db.add(make_site(id=None, enabled=False, next_check_at=NOW + timedelta(hours=1)))
+        await db.commit()
+
+        assert await soonest_check(db, NOW) is None
 
 
 class TestDueSites:

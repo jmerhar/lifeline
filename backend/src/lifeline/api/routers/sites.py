@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from ...models import CaptureMethod, Setting, Site, SiteStatus
 from ...schemas import (
@@ -299,11 +299,7 @@ async def test_rules(
 
 @router.post("/{site_id}/session/import")
 async def import_session(
-    site_id: int,
-    payload: CookieImport,
-    db: DbDep,
-    services: ServicesDep,
-    background: BackgroundTasks,
+    site_id: int, payload: CookieImport, db: DbDep, services: ServicesDep
 ) -> Message:
     """Store a session pasted in by hand."""
     site = await load_site(db, site_id)
@@ -317,9 +313,9 @@ async def import_session(
     await services.runner.store_session(
         site_id, state, CaptureMethod.IMPORT, user_agent=payload.user_agent
     )
-    # Checked as soon as the response is sent rather than at the next tick, which can be minutes
-    # away, so the new session's status is known within seconds of storing it.
-    background.add_task(services.runner.run, site_id)
+    # Checked at once rather than when the scheduler next looks, which can be minutes away, so
+    # the new session's status is known within seconds of storing it.
+    services.scheduler.wake()
     return Message(detail="session imported")
 
 

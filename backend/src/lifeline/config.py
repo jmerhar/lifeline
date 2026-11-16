@@ -18,10 +18,10 @@ class Settings(AppSettings):
 
     database_filename = "lifeline.db"
 
-    # How often the scheduler looks for due checks. Nothing it does needs finer resolution than
-    # five minutes: site intervals are in days, failed requests are retried after 15 minutes at
-    # the soonest, risk warnings and pruning matter by the day, and "Check now" and a newly
-    # stored session run their check directly instead of waiting for a tick.
+    # The longest the scheduler waits between looks for due checks. It wakes earlier when the
+    # soonest check falls due and when a session is stored, so this only bounds how late a check
+    # brought forward in the interface can run; site intervals are in days and failed requests
+    # are retried after 15 minutes at the soonest.
     scheduler_tick_seconds: int = Field(300, ge=1)
 
     # Encrypts stored session state. Supplied here, read from ``SECRET_KEY_FILE``, or —
