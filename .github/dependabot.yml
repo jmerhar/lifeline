@@ -26,6 +26,9 @@ updates:
       default-days: 3
       exclude:
         - "@jmerhar/*"
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend:
         patterns:

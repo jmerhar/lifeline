@@ -113,6 +113,9 @@ ecosystem = "npm"
 directory = "/frontend"
 group = "frontend"
 comment = "The interface."
+# A TypeScript major lands before the tools that declare it as a peer (openapi-typescript, msw)
+# accept it, and one unresolvable peer fails the whole grouped update.
+ignore = [{ dependency = "typescript", update_types = ["version-update:semver-major"] }]
 
 [[dependabot.update]]
 ecosystem = "pip"
