@@ -3,6 +3,8 @@
 ref = "v1"
 files = [
   "make/devtools.mk",
+  "make/npm.mk",
+  "bin/npm-ci.sh",
   "config/ruff.toml",
   "bin/dev.sh",
   "bin/lint.sh",

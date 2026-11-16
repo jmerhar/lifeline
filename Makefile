@@ -1,7 +1,6 @@
 .PHONY: install browser dev up down logs shell build test test-backend test-frontend \
         test-browser coverage lint openapi contract inspect check migrate revision \
-        db-shell node-modules \
-        lockfile release clean
+        db-shell release clean
 
 # help, devtools-update and coverage-tooling come from jmerhar/devtools; make fetches them on the
 # first run and whenever devtools.toml changes.
@@ -16,7 +15,7 @@ install: ## Create the backend virtualenv and install the frontend packages
 	python3 -m venv backend/.venv
 	backend/.venv/bin/pip install --quiet --upgrade pip
 	backend/.venv/bin/pip install --quiet -e "backend[test]"
-	cd frontend && npm ci --no-audit --no-fund --registry="$$(cd / && npm config get registry)"
+	$(MAKE) node-modules
 	@echo "Installed. 'make browser' adds the browser the interactive login needs."
 
 browser: ## Download the Chromium build Playwright drives
@@ -91,16 +90,10 @@ db-shell: ## Open a SQLite shell on the development database
 
 ##@ Releasing
 
-lockfile: ## Regenerate package-lock.json (Linux binaries, public registry URLs)
-	.devtools/bin/lockfile.sh
-
 release: ## Cut a release from CHANGELOG.md (usage: make release VERSION=X.Y.Z; then push both)
 	.devtools/bin/release.sh $(VERSION)
 
 ##@ Housekeeping
-
-node-modules: ## Reinstall the frontend packages
-	cd frontend && rm -rf node_modules && npm ci --no-audit --no-fund --registry="$$(cd / && npm config get registry)"
 
 clean: ## Remove build and coverage artefacts (all regenerable)
 	rm -rf backend/htmlcov backend/coverage.xml backend/coverage.json backend/.coverage \
