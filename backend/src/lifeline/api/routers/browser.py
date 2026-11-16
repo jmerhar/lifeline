@@ -9,7 +9,15 @@ HTTP authentication challenge.
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 
 from ...models import CaptureMethod
 from ...schemas import Message
@@ -24,7 +32,9 @@ GUARDED = [Depends(require_setup_complete), Depends(require_user)]
 
 
 @router.post("/{token}/save", dependencies=GUARDED)
-async def save_session(token: str, db: DbDep, services: ServicesDep) -> Message:
+async def save_session(
+    token: str, db: DbDep, services: ServicesDep, background: BackgroundTasks
+) -> Message:
     """Store the session the live browser is holding, then close it."""
     try:
         site_id = services.browser.get(token).site_id
@@ -41,6 +51,9 @@ async def save_session(token: str, db: DbDep, services: ServicesDep) -> Message:
     # Closed as soon as it is saved: a headful browser is the most expensive thing here, and
     # leaving one running costs the host for nothing.
     await services.browser.close()
+    # Checked as soon as the response is sent rather than at the next tick, which can be minutes
+    # away, so the new session's status is known within seconds of storing it.
+    background.add_task(services.runner.run, site_id)
     return Message(detail="session saved")
 
 

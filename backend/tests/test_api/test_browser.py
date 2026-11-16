@@ -83,6 +83,17 @@ class TestSaving:
         # earned it.
         assert site.user_agent == "FakeAgent/1"
 
+    async def test_checks_the_saved_session_straight_away(
+        self, logged_in: httpx.AsyncClient, created: dict
+    ) -> None:
+        opened = (await logged_in.post(f"/api/sites/{created['id']}/login-session")).json()
+        token = opened["ws_path"].split("/")[3]
+
+        await logged_in.post(f"/api/browser/{token}/save")
+
+        checks = (await logged_in.get(f"/api/sites/{created['id']}/checks")).json()
+        assert len(checks) == 1
+
     async def test_closes_the_browser_once_it_is_saved(
         self, logged_in: httpx.AsyncClient, created: dict, services, fake_processes
     ) -> None:
