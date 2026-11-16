@@ -2,10 +2,10 @@
 
 import httpx
 import pytest
+from jigkit.refusals import SETUP_REQUIRED
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lifeline.api.deps import SETUP_REQUIRED_DETAIL
 from lifeline.models import Setting, User
 
 GOOD_PASSWORD = "a-good-long-password"
@@ -107,7 +107,7 @@ class TestSetupGuard:
         response = await client.get(path)
 
         assert response.status_code == 409
-        assert response.json()["detail"] == SETUP_REQUIRED_DETAIL
+        assert response.json()["detail"] == SETUP_REQUIRED
 
 
 class TestLogin:

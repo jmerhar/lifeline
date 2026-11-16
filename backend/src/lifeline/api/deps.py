@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from jigkit.auth.sessions import SessionStore
+from jigkit.refusals import NOT_AUTHENTICATED, SETUP_REQUIRED
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -23,7 +24,6 @@ from .security import LoginThrottle, login_sessions
 # Returned instead of 401 while the instance has no administrator, so the UI knows to show
 # the first-run wizard rather than a login form it cannot get past.
 SETUP_REQUIRED_STATUS = status.HTTP_409_CONFLICT
-SETUP_REQUIRED_DETAIL = "setup_required"
 
 
 @dataclass
@@ -81,14 +81,14 @@ async def require_user(request: Request, services: ServicesDep, db: DbDep) -> Us
     for a real login.
     """
     if await _find_admin(db) is None:
-        raise HTTPException(status_code=SETUP_REQUIRED_STATUS, detail=SETUP_REQUIRED_DETAIL)
+        raise HTTPException(status_code=SETUP_REQUIRED_STATUS, detail=SETUP_REQUIRED)
     if services.settings.auth_disabled:
         return None
 
     token = request.cookies.get(services.settings.session_cookie_name)
     session = await services.sessions.find(db, token) if token else None
     if session is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=NOT_AUTHENTICATED)
     return session.user
 
 

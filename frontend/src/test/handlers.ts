@@ -33,6 +33,6 @@ export const setupRequired = [
 /** The API answering "you are not logged in". */
 export const loggedOut = [
   http.get("/api/auth/me", () =>
-    HttpResponse.json({ detail: "not authenticated" }, { status: 401 }),
+    HttpResponse.json({ detail: "not_authenticated" }, { status: 401 }),
   ),
 ];

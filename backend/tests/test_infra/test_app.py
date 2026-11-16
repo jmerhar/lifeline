@@ -153,6 +153,15 @@ class TestAccessPolicy:
 
         assert refused == dict.fromkeys(guarded, 401)
 
+    async def test_says_why_a_request_without_a_login_is_refused(
+        self, client: httpx.AsyncClient, admin: User
+    ) -> None:
+        # The code the interface's client turns into "log in"; jigkit names the same one.
+        response = await client.get("/api/sites")
+
+        assert response.status_code == 401
+        assert response.json() == {"detail": "not_authenticated"}
+
     async def test_before_setup_it_asks_for_setup_rather_than_a_login(
         self, client: httpx.AsyncClient
     ) -> None:
