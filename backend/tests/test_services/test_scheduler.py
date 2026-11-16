@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from jigkit.testing.notify import RecordingSender
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -14,7 +15,6 @@ from lifeline.services.notifier import Notifier
 from lifeline.services.runner import CheckRunner
 from lifeline.services.scheduler import Scheduler
 from lifeline.services.store import load_settings_row
-from tests.conftest import RecordingSender
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 

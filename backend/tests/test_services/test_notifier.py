@@ -3,9 +3,10 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from jigkit.testing.notify import RecordingSender
 
 from lifeline.services.notifier import Event, Notifier, build
-from tests.conftest import RecordingSender, make_settings, make_site
+from tests.conftest import make_settings, make_site
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 CONFIGURED = "tgram://token/chat"
@@ -23,7 +24,7 @@ class TestDelivery:
         row = make_settings(apprise_urls="tgram://a/b\nmailto://c:d@e")
 
         assert await notifier.notify(row, Event.LAPSED, make_site(), "gone", now=NOW) is True
-        assert sender.sent[0][0] == ["tgram://a/b", "mailto://c:d@e"]
+        assert sender.sent[0].urls == ["tgram://a/b", "mailto://c:d@e"]
 
     async def test_sends_nothing_when_no_destination_is_configured(
         self, notifier: Notifier, sender: RecordingSender
@@ -32,20 +33,20 @@ class TestDelivery:
         assert sender.sent == []
 
     async def test_reports_a_failure_to_deliver(self) -> None:
-        sender = RecordingSender(delivers=False)
+        sender = RecordingSender(accept=False)
         notifier = Notifier(sender)
 
         assert await notifier.notify(settings_with(), Event.LAPSED, make_site(), now=NOW) is False
 
     async def test_a_failed_send_does_not_start_the_cooldown(self) -> None:
         # Otherwise a transient outage silences the message entirely.
-        sender = RecordingSender(delivers=False)
+        sender = RecordingSender(accept=False)
         notifier = Notifier(sender)
         row = settings_with()
         site = make_site()
 
         await notifier.notify(row, Event.LAPSED, site, now=NOW)
-        sender.delivers = True
+        sender.accept = True
 
         assert await notifier.notify(row, Event.LAPSED, site, now=NOW) is True
 

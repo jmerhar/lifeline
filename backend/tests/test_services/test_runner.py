@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from jigkit.testing.notify import RecordingSender
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,7 +24,7 @@ from lifeline.services.checker import RETRY_BASE
 from lifeline.services.crypto import Cipher
 from lifeline.services.runner import CheckRunner
 from lifeline.services.store import load_settings_row
-from tests.conftest import RecordingSender, make_fetch_result
+from tests.conftest import make_fetch_result
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 ROTATED_STATE = {

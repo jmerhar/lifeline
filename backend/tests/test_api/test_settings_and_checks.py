@@ -1,10 +1,10 @@
 """The settings screen and the history view."""
 
 import httpx
+from jigkit.testing.notify import RecordingSender
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lifeline.models import Check, CheckOutcome, Site, User
-from tests.conftest import RecordingSender
 
 
 class TestSettings:

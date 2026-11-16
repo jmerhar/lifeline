@@ -14,6 +14,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from jigkit.testing.notify import RecordingSender
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from lifeline.config import Settings
@@ -92,26 +93,6 @@ async def db(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[As
 def cipher(settings: Settings) -> Cipher:
     """A cipher using the test secret."""
     return Cipher.from_settings(settings)
-
-
-class RecordingSender:
-    """A notification sender that keeps what it was asked to send.
-
-    Standing in for Apprise here is deliberate: the assertions are about which messages
-    the rules produce, and a real send would make that depend on a network.
-    """
-
-    def __init__(self, *, delivers: bool = True) -> None:
-        self.delivers = delivers
-        self.sent: list[tuple[list[str], str, str]] = []
-
-    async def send(self, urls: list[str], title: str, body: str) -> bool:
-        self.sent.append((urls, title, body))
-        return self.delivers
-
-    @property
-    def titles(self) -> list[str]:
-        return [title for _, title, _ in self.sent]
 
 
 class StubFetcher:
