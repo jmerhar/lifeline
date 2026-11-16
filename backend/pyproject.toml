@@ -11,13 +11,13 @@ dependencies = [
     # Settings, database, migrations, logging and the health probe shared with the other apps
     # built on it. Pinned exactly; Dependabot proposes each new release.
     "jigkit[auth,db,notify,web]==0.20.0",
-    "fastapi>=0.162.5,<0.163",
+    "fastapi>=0.162.6,<0.163",
     "uvicorn[standard]>=0.54.0",
     "sqlalchemy[asyncio]>=2.1.8",
     "aiosqlite>=0.22.1",
     "alembic>=1.20.1",
     "pydantic>=2.14.3",
-    "pydantic-settings>=2.16.2",
+    "pydantic-settings>=2.16.3",
     "httpx>=0.28.1",
     "cryptography>=50.0.2",
     "apprise>=2.2.0",
@@ -33,10 +33,10 @@ dependencies = [
 test = [
     "jigkit[testing]==0.20.0",
     "pytest>=9.2.0",
-    "pytest-asyncio>=1.4.1.post1",
+    "pytest-asyncio>=1.5.0",
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
-    "ruff>=0.17.4",
+    "ruff>=0.17.5",
 ]
 
 [project.urls]
