@@ -147,6 +147,11 @@ class TestNextCheckTime:
 
         assert next_check_time(site, CheckOutcome.NETWORK_ERROR, now=NOW) == NOW + RETRY_BASE
 
+    def test_a_check_that_could_not_run_retries_in_minutes(self) -> None:
+        site = make_site(consecutive_failures=1)
+
+        assert next_check_time(site, CheckOutcome.CHECK_FAILED, now=NOW) == NOW + RETRY_BASE
+
     def test_the_retry_delay_grows_with_consecutive_failures(self) -> None:
         first = next_check_time(make_site(consecutive_failures=1), CheckOutcome.HTTP_ERROR, now=NOW)
         second = next_check_time(

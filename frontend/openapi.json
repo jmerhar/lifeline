@@ -17,7 +17,8 @@
           "login_expired",
           "pattern_missing",
           "http_error",
-          "network_error"
+          "network_error",
+          "check_failed"
         ],
         "title": "CheckOutcome",
         "type": "string"

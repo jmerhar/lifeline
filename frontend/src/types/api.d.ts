@@ -433,7 +433,7 @@ export interface components {
          * @description What one ping established.
          * @enum {string}
          */
-        CheckOutcome: "ok" | "login_expired" | "pattern_missing" | "http_error" | "network_error";
+        CheckOutcome: "ok" | "login_expired" | "pattern_missing" | "http_error" | "network_error" | "check_failed";
         /**
          * CheckRead
          * @description One entry of a site's history.

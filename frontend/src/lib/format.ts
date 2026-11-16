@@ -93,6 +93,7 @@ export const outcomeLabels: Record<CheckOutcome, string> = {
   pattern_missing: "page did not look logged in",
   http_error: "unexpected response",
   network_error: "could not connect",
+  check_failed: "check could not run",
 };
 
 /** Whether an outcome means the session is still good. */

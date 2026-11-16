@@ -27,6 +27,8 @@ class CheckOutcome(StrEnum):
     PATTERN_MISSING = "pattern_missing"
     HTTP_ERROR = "http_error"
     NETWORK_ERROR = "network_error"
+    # The check itself raised before reaching a verdict, so nothing is known about the session.
+    CHECK_FAILED = "check_failed"
 
     @property
     def is_success(self) -> bool:

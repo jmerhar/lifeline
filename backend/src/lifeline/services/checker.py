@@ -126,12 +126,16 @@ def next_check_time(
 
     A successful or lapsed check waits the site's full interval: a dead session is not
     revived by asking again sooner, and requesting more often than the account needs is
-    exactly the behaviour a site is entitled to object to. A failing *request* backs off
-    from minutes upwards instead, so a passing network problem is retried promptly
-    without turning into a week-long gap in cover.
+    exactly the behaviour a site is entitled to object to. A failing *request*, or a check
+    that could not run at all, backs off from minutes upwards instead, so a passing problem
+    is retried promptly without turning into a week-long gap in cover.
     """
     interval = timedelta(days=site.interval_days)
-    if outcome in (CheckOutcome.HTTP_ERROR, CheckOutcome.NETWORK_ERROR):
+    if outcome in (
+        CheckOutcome.HTTP_ERROR,
+        CheckOutcome.NETWORK_ERROR,
+        CheckOutcome.CHECK_FAILED,
+    ):
         exponent = min(max(site.consecutive_failures - 1, 0), MAX_RETRY_EXPONENT)
         return now + min(RETRY_BASE * RETRY_FACTOR**exponent, interval)
 

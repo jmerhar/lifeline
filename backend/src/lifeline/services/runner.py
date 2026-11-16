@@ -65,6 +65,21 @@ def _hosts_of(site: Site) -> list[str]:
     return sorted(host for host in hosts if host)
 
 
+def _failed_report(exc: Exception) -> CheckReport:
+    """The report for a check that raised before it reached a verdict."""
+    return CheckReport(
+        verdict=Verdict(
+            CheckOutcome.CHECK_FAILED,
+            f"the check could not run: {type(exc).__name__}: {exc}",
+        ),
+        status_code=None,
+        final_url=None,
+        duration_ms=0,
+        state=None,
+        rotated=False,
+    )
+
+
 class CheckRunner:
     """Performs checks and applies what they mean to a site.
 
@@ -127,12 +142,18 @@ class CheckRunner:
                     rotated=False,
                 )
             else:
-                report = await perform_check(
-                    site,
-                    state,
-                    self._fetcher_for(site),
-                    accept_language=settings_row.accept_language,
-                )
+                try:
+                    report = await perform_check(
+                        site,
+                        state,
+                        self._fetcher_for(site),
+                        accept_language=settings_row.accept_language,
+                    )
+                except Exception as exc:
+                    # Recorded as a check like any other, so the site backs off and shows the
+                    # failure instead of staying due and being retried on every tick.
+                    logger.exception("the check for %s raised", site.name)
+                    report = _failed_report(exc)
 
             check = self._record(session, site, report, now, state)
             events = self._apply(site, report, settings_row, now)
@@ -312,11 +333,45 @@ class CheckRunner:
         for site_id in site_ids:
             try:
                 await self.run(site_id, now=now)
-            except Exception:
+            except Exception as exc:
                 # One site's failure must not stop the rest of the sweep; the traceback is
                 # logged rather than swallowed so it is still diagnosable.
                 logger.exception("check failed for site %s", site_id)
+                await self._record_failure(site_id, exc, now)
         return site_ids
+
+    async def _record_failure(self, site_id: int, exc: Exception, now: datetime) -> None:
+        """Record a run that raised outside the check, and move the site's next check on.
+
+        ``run`` turns a check that raises into a recorded outcome itself; this covers whatever
+        raised around it — reading the site, storing the result — which left nothing written.
+        Without it the site would stay due and be tried again on every tick. A site whose next
+        check is no longer due was already stored by ``run``, which then raised afterwards (in
+        sending a notification), and is left as ``run`` wrote it. Best effort: if the database
+        is what failed, this fails too, and the log already holds the cause.
+        """
+        try:
+            async with self._sessionmaker() as session:
+                site = await get_site(session, site_id)
+                if site is None or (site.next_check_at is not None and site.next_check_at > now):
+                    return
+                report = _failed_report(exc)
+                session.add(
+                    Check(
+                        site_id=site.id,
+                        started_at=now,
+                        outcome=report.verdict.outcome,
+                        duration_ms=0,
+                        detail=report.verdict.detail,
+                    )
+                )
+                site.last_check_at = now
+                site.consecutive_failures += 1
+                site.status = SiteStatus.ERROR
+                site.next_check_at = next_check_time(site, report.verdict.outcome, now=now)
+                await session.commit()
+        except Exception:
+            logger.exception("could not record the failed check for site %s", site_id)
 
     async def store_session(
         self,

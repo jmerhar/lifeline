@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from lifeline.models import CaptureMethod, Check, CheckOutcome, Site, SiteSession, SiteStatus
+from lifeline.models import (
+    CaptureMethod,
+    Check,
+    CheckOutcome,
+    PingMethod,
+    Site,
+    SiteSession,
+    SiteStatus,
+)
+from lifeline.services.checker import RETRY_BASE
 from lifeline.services.crypto import Cipher
 from lifeline.services.runner import CheckRunner
 from lifeline.services.store import load_settings_row
@@ -285,6 +294,144 @@ class TestErrors:
         assert (await reload(db, logged_in_site)).session.state == original
 
 
+class TestACheckThatRaises:
+    async def test_is_recorded_and_backs_off_instead_of_staying_due(
+        self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        runner = make_runner(RuntimeError("the fetcher broke"))
+
+        assert await runner.run_due(now=NOW) == [logged_in_site.id]
+
+        site = await reload(db, logged_in_site)
+        check = (await db.execute(select(Check))).scalar_one()
+        assert check.outcome is CheckOutcome.CHECK_FAILED
+        assert "RuntimeError: the fetcher broke" in check.detail
+        assert site.status is SiteStatus.ERROR
+        assert site.consecutive_failures == 1
+        assert site.next_check_at == NOW + RETRY_BASE
+        # The next tick finds nothing due.
+        assert await runner.run_due(now=NOW + timedelta(minutes=5)) == []
+
+    async def test_check_now_returns_the_failure_rather_than_raising(
+        self, db: AsyncSession, logged_in_site: Site, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        # A deployment built without the browser cannot honour a browser-pinged site. The
+        # recorded outcome says the check could not run and why, rather than reporting a ping
+        # that never happened.
+        logged_in_site.ping_method = PingMethod.BROWSER
+        await db.commit()
+
+        check = await make_runner().run(logged_in_site.id, now=NOW)
+
+        assert check is not None
+        assert check.outcome is CheckOutcome.CHECK_FAILED
+        assert "not available" in check.detail
+
+    async def test_notifies_once_the_failures_persist(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        sender: RecordingSender,
+    ) -> None:
+        logged_in_site.consecutive_failures = 2
+        await db.commit()
+
+        await make_runner(RuntimeError("broke")).run(logged_in_site.id, now=NOW)
+
+        assert len(sender.titles) == 1
+
+
+class TestARunThatRaisesAroundTheCheck:
+    async def test_still_moves_the_site_on(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        runner = make_runner()
+
+        def exploding_record(*_: object) -> Check:
+            raise RuntimeError("could not write the result")
+
+        monkeypatch.setattr(runner, "_record", exploding_record)
+
+        await runner.run_due(now=NOW)
+
+        site = await reload(db, logged_in_site)
+        check = (await db.execute(select(Check))).scalar_one()
+        assert check.outcome is CheckOutcome.CHECK_FAILED
+        assert "could not write the result" in check.detail
+        assert site.status is SiteStatus.ERROR
+        assert site.last_check_at == NOW
+        assert site.next_check_at == NOW + RETRY_BASE
+        assert await runner.run_due(now=NOW + timedelta(minutes=5)) == []
+
+    async def test_a_database_that_fails_too_does_not_stop_the_sweep(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        runner = make_runner()
+        working = runner._sessionmaker
+
+        async def exploding_run(*_: object, **__: object) -> None:
+            raise RuntimeError("boom")
+
+        def sessionmaker_that_fails_after_the_due_query():
+            # Only the query for due sites gets through; recording the failure does not.
+            monkeypatch.setattr(runner, "_sessionmaker", broken)
+            return working()
+
+        def broken():
+            raise RuntimeError("the database is gone")
+
+        monkeypatch.setattr(runner, "run", exploding_run)
+        monkeypatch.setattr(runner, "_sessionmaker", sessionmaker_that_fails_after_the_due_query)
+
+        with caplog.at_level(logging.ERROR):
+            assert await runner.run_due(now=NOW) == [logged_in_site.id]
+
+        assert "could not record the failed check" in caplog.text
+
+    async def test_a_check_already_stored_is_not_overwritten(
+        self,
+        db: AsyncSession,
+        logged_in_site: Site,
+        make_runner: Callable[..., CheckRunner],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Notifications are sent after the result is committed, so a failure there must not
+        # turn a stored check into a failed one.
+        logged_in_site.inactivity_limit_days = 3
+        await db.commit()
+        runner = make_runner()
+
+        async def exploding_notify(*_: object, **__: object) -> None:
+            raise RuntimeError("the notification service is down")
+
+        monkeypatch.setattr(runner._notifier, "notify", exploding_notify)
+
+        await runner.run_due(now=NOW)
+
+        site = await reload(db, logged_in_site)
+        outcomes = [check.outcome for check in (await db.execute(select(Check))).scalars()]
+        assert outcomes == [CheckOutcome.OK]
+        assert site.consecutive_failures == 0
+        assert site.next_check_at > NOW + timedelta(days=1)
+
+    async def test_a_site_deleted_meanwhile_is_left_alone(
+        self, db: AsyncSession, make_runner: Callable[..., CheckRunner]
+    ) -> None:
+        await make_runner()._record_failure(9999, RuntimeError("boom"), NOW)
+
+        assert (await db.execute(select(Check))).scalars().all() == []
+
+
 class TestAtRisk:
     async def test_a_healthy_site_running_out_of_time_is_flagged(
         self,
@@ -457,31 +604,6 @@ class TestStoreSession:
     ) -> None:
         with pytest.raises(LookupError):
             await make_runner().store_session(4242, ROTATED_STATE, CaptureMethod.IMPORT, now=NOW)
-
-
-class TestUnavailableMethod:
-    async def test_a_browser_check_without_a_browser_fetcher_is_reported(
-        self,
-        db: AsyncSession,
-        logged_in_site: Site,
-        sessionmaker,
-        settings,
-        cipher: Cipher,
-        notifier,
-    ) -> None:
-        # A deployment built without the browser: the site's configuration cannot be honoured,
-        # and saying so is better than recording a check that never happened.
-        from lifeline.models import PingMethod
-        from lifeline.services.checker import HttpFetcher
-
-        logged_in_site.ping_method = PingMethod.BROWSER
-        await db.commit()
-        runner = CheckRunner(
-            sessionmaker, settings, cipher, notifier, {PingMethod.HTTP: HttpFetcher(settings)}
-        )
-
-        with pytest.raises(RuntimeError, match="not available"):
-            await runner.run(logged_in_site.id, now=NOW)
 
 
 class TestLogging:
