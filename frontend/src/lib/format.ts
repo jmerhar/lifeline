@@ -43,8 +43,7 @@ export function countdown(value: string | null, now: Date = new Date()): string 
  */
 export function dueIn(value: string | null, now: Date = new Date()): string {
   const remaining = value ? new Date(value).getTime() - now.getTime() : 0;
-  // Ticks are a minute apart, so anything nearer than one is happening now as far as anybody
-  // watching can tell.
+  // Anything nearer than a minute is happening now as far as anybody watching can tell.
   if (remaining < MINUTE) return "due now";
   if (remaining < HOUR) return `in ${Math.floor(remaining / MINUTE)}m`;
   if (remaining < DAY) return `in ${Math.floor(remaining / HOUR)}h`;

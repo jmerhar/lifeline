@@ -1,21 +1,28 @@
 """Runtime configuration, read from the environment.
 
 Built on jigkit's ``AppSettings``, which supplies the data directory, the database URL, the
-log level, the cookie and scheduler settings, and the rules every app shares: a blank variable
-means unset, and every secret-bearing setting accepts a ``*_FILE`` variant naming a file to read
-it from instead (setting both is an error).
+log level, the cookie settings, whether the scheduler runs, and the rules every app shares: a
+blank variable means unset, and every secret-bearing setting accepts a ``*_FILE`` variant naming
+a file to read it from instead (setting both is an error).
 """
 
 from functools import lru_cache
 from pathlib import Path
 
 from jigkit.settings import AppSettings
+from pydantic import Field
 
 
 class Settings(AppSettings):
     """Everything the application reads from its environment."""
 
     database_filename = "lifeline.db"
+
+    # How often the scheduler looks for due checks. Nothing it does needs finer resolution than
+    # five minutes: site intervals are in days, failed requests are retried after 15 minutes at
+    # the soonest, risk warnings and pruning matter by the day, and "Check now" and a newly
+    # stored session run their check directly instead of waiting for a tick.
+    scheduler_tick_seconds: int = Field(300, ge=1)
 
     # Encrypts stored session state. Supplied here, read from ``SECRET_KEY_FILE``, or —
     # absent both — generated into the data directory on first boot (see services.crypto).

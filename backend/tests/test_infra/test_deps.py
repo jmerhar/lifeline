@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from lifeline.api.deps import build_services
 from lifeline.config import Settings
@@ -71,6 +72,29 @@ class TestGetSettings:
         settings = Settings(data_dir=data_dir, database_url="sqlite+aiosqlite:///:memory:")
 
         assert settings.resolved_database_url == "sqlite+aiosqlite:///:memory:"
+
+
+class TestSchedulerSettings:
+    async def test_the_scheduler_ticks_every_five_minutes_by_default(
+        self, data_dir: Path
+    ) -> None:
+        services = build_services(Settings(data_dir=data_dir, scheduler_enabled=False))
+
+        try:
+            assert services.scheduler._loop._interval == 300
+        finally:
+            await services.engine.dispose()
+
+    def test_the_tick_can_be_set_from_the_environment(
+        self, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SCHEDULER_TICK_SECONDS", "60")
+
+        assert Settings(data_dir=data_dir).scheduler_tick_seconds == 60
+
+    def test_a_tick_of_zero_is_refused(self, data_dir: Path) -> None:
+        with pytest.raises(ValidationError):
+            Settings(data_dir=data_dir, scheduler_tick_seconds=0)
 
 
 class TestBlankSettings:
