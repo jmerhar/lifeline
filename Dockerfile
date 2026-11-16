@@ -16,9 +16,10 @@ RUN npm run build
 FROM python:3.14-slim AS app
 
 # Xvfb gives the headful browser a screen, x11vnc serves that screen, and the API bridges it
-# to the browser tab. Chromium's own libraries come from `playwright install --with-deps`.
+# to the browser tab. Chromium's own libraries come from `playwright install --with-deps`;
+# libatomic1 is for the Node build Playwright runs as its driver, which that does not cover.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends xvfb x11vnc ca-certificates \
+    && apt-get install -y --no-install-recommends xvfb x11vnc ca-certificates libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # The Bitwarden extension, loaded into the interactive-login browser so a password manager can fill
