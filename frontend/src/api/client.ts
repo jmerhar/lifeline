@@ -7,6 +7,16 @@
  * raised as recognisable errors rather than left as status codes to be re-checked.
  */
 
+import {
+  ApiClient,
+  ApiError,
+  fieldMessages,
+  NOT_AUTHENTICATED,
+  type Query,
+  SETUP_REQUIRED,
+  writeHeader,
+} from "@jmerhar/jigkit/api";
+
 import type {
   Check,
   DetectedRules,
@@ -20,20 +30,12 @@ import type {
   User,
 } from "./types";
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
+export { ApiError };
 
 /** The instance has no administrator yet. */
 export class SetupRequired extends Error {
   constructor() {
-    super("setup_required");
+    super(SETUP_REQUIRED);
     this.name = "SetupRequired";
   }
 }
@@ -41,7 +43,7 @@ export class SetupRequired extends Error {
 /** Nobody is logged in. */
 export class NotAuthenticated extends Error {
   constructor() {
-    super("not_authenticated");
+    super(NOT_AUTHENTICATED);
     this.name = "NotAuthenticated";
   }
 }
@@ -50,102 +52,61 @@ export class NotAuthenticated extends Error {
  * Sent with every write. The API refuses a write without it, and a page on another site cannot
  * add it to a request without a CORS preflight the API never grants.
  */
-export const WRITE_HEADER = { "X-Requested-With": "lifeline" };
+export const WRITE_HEADER = writeHeader("lifeline");
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const method = (init.method ?? "GET").toUpperCase();
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(method === "GET" || method === "HEAD" ? {} : WRITE_HEADER),
-      ...init.headers,
-    },
-    // The session is a cookie, and a cross-origin dev server would otherwise drop it.
-    credentials: "same-origin",
-  });
-
-  if (response.status === 409) {
-    const body = await safeJson(response);
-    if (body?.detail === "setup_required") throw new SetupRequired();
-    throw new ApiError(response.status, detailOf(body) ?? "conflict");
-  }
-  if (response.status === 401) throw new NotAuthenticated();
-  if (!response.ok) {
-    throw new ApiError(response.status, detailOf(await safeJson(response)) ?? response.statusText);
-  }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+/** The two refusals the whole app reacts to, as their own errors; anything else is an ApiError. */
+function refused(status: number, reason: string): Error | undefined {
+  if (status === 409 && reason === SETUP_REQUIRED) return new SetupRequired();
+  if (status === 401) return new NotAuthenticated();
+  return undefined;
 }
 
-async function safeJson(response: Response): Promise<{ detail?: unknown } | null> {
-  try {
-    return await response.json();
-  } catch {
-    // An error page from a proxy rather than the API; the status is all there is to go on.
-    return null;
-  }
-}
+// FastAPI answers a validation failure with a message per field, which is what tells someone
+// what to fix, so those are shown rather than a bare "invalid".
+const client = new ApiClient({ writeHeader: WRITE_HEADER, refused, invalid: fieldMessages });
 
-/**
- * The human-readable half of an error body.
- *
- * FastAPI answers a validation failure with a list of per-field objects rather than a
- * string, and rendering that list raw puts `[object Object]` in front of someone who just
- * mistyped a URL.
- */
-function detailOf(body: { detail?: unknown } | null): string | null {
-  const detail = body?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    const messages = detail
-      .map((item) => (typeof item === "object" && item && "msg" in item ? String(item.msg) : null))
-      .filter((message): message is string => Boolean(message));
-    if (messages.length) return messages.join("; ");
-  }
-  return null;
+function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
+  return client.request<T>(method, path, body, query);
 }
-
-const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
 export const api = {
   detectRules: (id: number) =>
-    request<DetectedRules>(`/sites/${id}/detect`, { method: "POST" }),
+    request<DetectedRules>("POST", `/sites/${id}/detect`),
   testRules: (id: number, rules: RuleTrial) =>
-    request<RuleTrialResult>(`/sites/${id}/test-rules`, { method: "POST", ...json(rules) }),
+    request<RuleTrialResult>("POST", `/sites/${id}/test-rules`, rules),
   completeSetup: (payload: { username: string; password: string }) =>
-    request<User>("/setup", { method: "POST", ...json(payload) }),
+    request<User>("POST", "/setup", payload),
 
-  health: () => request<Health>("/health"),
-  me: () => request<User>("/auth/me"),
+  health: () => request<Health>("GET", "/health"),
+  me: () => request<User>("GET", "/auth/me"),
   login: (payload: { username: string; password: string }) =>
-    request<User>("/auth/login", { method: "POST", ...json(payload) }),
-  logout: () => request<{ detail: string }>("/auth/logout", { method: "POST" }),
+    request<User>("POST", "/auth/login", payload),
+  logout: () => request<{ detail: string }>("POST", "/auth/logout"),
 
-  sites: () => request<Site[]>("/sites"),
-  site: (id: number) => request<Site>(`/sites/${id}`),
-  createSite: (payload: SiteWrite) => request<Site>("/sites", { method: "POST", ...json(payload) }),
+  sites: () => request<Site[]>("GET", "/sites"),
+  site: (id: number) => request<Site>("GET", `/sites/${id}`),
+  createSite: (payload: SiteWrite) => request<Site>("POST", "/sites", payload),
   updateSite: (id: number, payload: SiteWrite) =>
-    request<Site>(`/sites/${id}`, { method: "PUT", ...json(payload) }),
-  deleteSite: (id: number) => request<void>(`/sites/${id}`, { method: "DELETE" }),
-  checkNow: (id: number) => request<Check>(`/sites/${id}/check`, { method: "POST" }),
-  siteChecks: (id: number, limit = 50) => request<Check[]>(`/sites/${id}/checks?limit=${limit}`),
+    request<Site>("PUT", `/sites/${id}`, payload),
+  deleteSite: (id: number) => request<void>("DELETE", `/sites/${id}`),
+  checkNow: (id: number) => request<Check>("POST", `/sites/${id}/check`),
+  siteChecks: (id: number, limit = 50) => request<Check[]>("GET", `/sites/${id}/checks`, undefined, { limit }),
   importSession: (id: number, payload: { text: string; user_agent?: string | null }) =>
-    request<{ detail: string }>(`/sites/${id}/session/import`, { method: "POST", ...json(payload) }),
+    request<{ detail: string }>("POST", `/sites/${id}/session/import`, payload),
   forgetSession: (id: number) =>
-    request<{ detail: string }>(`/sites/${id}/session`, { method: "DELETE" }),
+    request<{ detail: string }>("DELETE", `/sites/${id}/session`),
   openLogin: (id: number) =>
-    request<LoginSession>(`/sites/${id}/login-session`, { method: "POST" }),
+    request<LoginSession>("POST", `/sites/${id}/login-session`),
 
   saveLogin: (token: string) =>
-    request<{ detail: string }>(`/browser/${token}/save`, { method: "POST" }),
+    request<{ detail: string }>("POST", `/browser/${token}/save`),
   closeLogin: (token: string) =>
-    request<{ detail: string }>(`/browser/${token}`, { method: "DELETE" }),
+    request<{ detail: string }>("DELETE", `/browser/${token}`),
 
-  checks: (limit = 100) => request<Check[]>(`/checks?limit=${limit}`),
-  settings: () => request<Settings>("/settings"),
+  checks: (limit = 100) => request<Check[]>("GET", "/checks", undefined, { limit }),
+  settings: () => request<Settings>("GET", "/settings"),
   saveSettings: (payload: Settings) =>
-    request<Settings>("/settings", { method: "PUT", ...json(payload) }),
+    request<Settings>("PUT", "/settings", payload),
   testNotification: () =>
-    request<{ detail: string }>("/settings/test-notification", { method: "POST" }),
+    request<{ detail: string }>("POST", "/settings/test-notification"),
 };

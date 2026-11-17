@@ -11,6 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@jmerhar/jigkit": "0.21.0",
     "@novnc/novnc": "^1.7.0",
     "@tanstack/react-query": "^5.62.0",
     "lucide-react": "^0.469.0",
