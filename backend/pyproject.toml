@@ -10,7 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     # Settings, database, migrations, logging and the health probe shared with the other apps
     # built on it. Pinned exactly; Dependabot proposes each new release.
-    "jigkit[auth,db,notify,web]==0.20.0",
+    "jigkit[auth,db,notify,web]==0.21.0",
     "fastapi>=0.162.5,<0.163",
     "uvicorn[standard]>=0.54.0",
     "sqlalchemy[asyncio]>=2.1.8",
@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "jigkit[testing]==0.20.0",
+    "jigkit[testing]==0.21.0",
     "pytest>=9.2.0",
     "pytest-asyncio>=1.4.1.post1",
     "pytest-cov>=7.1.0",
