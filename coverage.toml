@@ -27,5 +27,5 @@ gate = 96.0
 label = "Frontend (TypeScript)"
 format = "istanbul"
 report = "frontend/coverage/coverage-summary.json"
-html = "frontend/coverage"
+html = "frontend/coverage/html"
 gate = 96.0
