@@ -106,16 +106,14 @@ run = 'shellcheck bin/*.sh && .devtools/bin/check-lockfile.sh && python3 .devtoo
 image = "ghcr.io/jmerhar/lifeline"
 
 # .github/dependabot.yml, generated from these by `make devtools-fix`: GitHub Actions, then each
-# update below, every one grouped into a single weekly pull request that takes a release once it is
-# three days old. A pull request builds the image, so a dependency that breaks it fails there.
+# update below. Each takes a release once it is three days old, in one weekly pull request of minor
+# and patch releases and another of majors, which waits for a hand migration. A pull request builds
+# the image, so a dependency that breaks it fails there.
 [[dependabot.update]]
 ecosystem = "npm"
 directory = "/frontend"
 group = "frontend"
 comment = "The interface."
-# A TypeScript major lands before the tools that declare it as a peer (openapi-typescript, msw)
-# accept it, and one unresolvable peer fails the whole grouped update.
-ignore = [{ dependency = "typescript", update_types = ["version-update:semver-major"] }]
 
 [[dependabot.update]]
 ecosystem = "pip"
