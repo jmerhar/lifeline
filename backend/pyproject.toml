@@ -13,7 +13,7 @@ dependencies = [
     "jigkit[auth,db,notify,web]==0.21.0",
     "fastapi>=0.162.5,<0.163",
     "uvicorn[standard]>=0.54.0",
-    "sqlalchemy[asyncio]>=2.1.8",
+    "sqlalchemy[asyncio]>=2.1.9",
     "aiosqlite>=0.22.1",
     "alembic>=1.20.1",
     "pydantic>=2.14.3",
