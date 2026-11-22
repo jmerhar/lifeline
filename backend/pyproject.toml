@@ -11,7 +11,7 @@ dependencies = [
     # Settings, database, migrations, logging and the health probe shared with the other apps
     # built on it. Pinned exactly; Dependabot proposes each new release.
     "jigkit[auth,db,notify,web]==0.21.0",
-    "fastapi>=0.162.5,<0.163",
+    "fastapi>=0.165.0,<0.166",
     "uvicorn[standard]>=0.54.0",
     "sqlalchemy[asyncio]>=2.1.9",
     "aiosqlite>=0.22.1",
