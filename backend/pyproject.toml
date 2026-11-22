@@ -26,7 +26,7 @@ dependencies = [
     "websockets>=17.4",
     # Imported lazily by services.browser.supervisor, so neither the tests nor a
     # cookie-import-only deployment need a browser binary on disk.
-    "playwright>=1.65.1",
+    "playwright>=1.65.2",
 ]
 
 [project.optional-dependencies]
